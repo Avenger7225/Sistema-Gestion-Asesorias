@@ -1,203 +1,324 @@
-import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import { supabase } from '@/supabase' 
-
-// --- Variables locales ---
-// NOTA: Estas variables ya no se usan como simulación pura, pero las mantenemos para la estructura
-const initialInscripciones = {
-  // Alumno (UUID simulado)
-  '95e1d818-9efd-4c42-833c-e3886292631f': [1, 3], 
-  // Profesor (UUID simulado)
-  '9f61b4aa-2a85-451e-bdbf-ea848f760d15': [1, 4] 
-}
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+import { supabase } from '@/supabase'; // Asume que tienes un archivo de configuración de Supabase
+import { useAuthStore } from '@/stores/auth'; // Necesitamos el ID del usuario
 
 export const useCursosStore = defineStore('cursos', () => {
-  const cursos = ref([]) 
-  const inscripciones = ref(initialInscripciones) // Se usará la simulación por ahora
-  const solicitudes = ref([]) // 🛑 Ahora se llenará con datos reales
-  const isLoading = ref(false)
+    // --- ESTADO ---
+    // NOTA: Renombramos 'cursos' a 'asesorias' en el fetch, pero mantenemos la variable 'cursos' para consistencia en la app
+    const cursos = ref([]); 
+    const solicitudes = ref([]);
+    const inscripciones = ref({}); // Estructura: { [userId]: [cursoId, cursoId, ...], ... }
+    const isLoading = ref(false);
+    // Nuevo estado para almacenar los nombres de profesores por ID
+    const profesorNames = ref({}); 
 
-  // Función auxiliar para obtener las inscripciones (la lógica real de RLS la implementaremos luego)
-  function getCursosByUserId(userId) {
-    const userCursosIds = inscripciones.value[userId] || []
-    return cursos.value.filter(curso => userCursosIds.includes(curso.id))
-  }
-
-  // --- Funciones de Supabase ---
-
-  async function fetchCursos() {
-    isLoading.value = true;
+    // Canales de Realtime para Supabase
+    let asesoriasChannel = null; // Renombrado
+    let solicitudesChannel = null;
+    let inscripcionesChannel = null;
     
-    // Obtener los cursos (asesorias)
-    const { data: asesoriasData, error: cursosError } = await supabase
-      .from('asesorias')
-      .select(`
-        id,
-        nombre,
-        id_profesor,
-        descripcion,
-        horario,
-        cupo_maximo
-      `)
-      .order('id', { ascending: true });
+    const authStore = useAuthStore();
+    const userId = computed(() => authStore.user?.id);
 
-    if (cursosError) {
-      console.error('Error al cargar cursos desde Supabase:', cursosError);
-      isLoading.value = false;
-      return;
-    }
+    // --- COMPUTADAS ---
 
-    // Mapear los datos de Supabase a la estructura local
-    cursos.value = asesoriasData.map(asesoria => ({
-      id: asesoria.id,
-      nombre: asesoria.nombre,
-      descripcion: asesoria.descripcion || 'Sin descripción.',
-      horario: asesoria.horario || 'Sin horario',
-      cupo: asesoria.cupo_maximo || 0, // Mapeado de cupo_maximo (DB) a cupo (local)
-      profesorId: asesoria.id_profesor,
-      profesor: 'Sin asignar', 
-    }));
-    
-    // 🛑 NUEVA FUNCIÓN: Obtener solicitudes pendientes
-    await fetchSolicitudes();
+    // Verifica si el usuario está inscrito/asignado al curso
+    const isUserInvolvedInCourse = computed(() => (idCurso) => {
+        if (!userId.value) return false;
+        const userCursosIds = inscripciones.value[userId.value] || [];
+        // Los IDs del curso de la store son números, los que vienen de Firebase/Supabase/DB deben ser consistentes
+        return userCursosIds.includes(idCurso); 
+    });
 
-    isLoading.value = false;
-  }
-  
-  // 🛑 NUEVA FUNCIÓN: Obtener solicitudes (necesita política RLS de SELECT)
-  async function fetchSolicitudes() {
-      // Necesita la política RLS de SELECT en la tabla 'solicitudes' para funcionar
-      const { data, error } = await supabase
-          .from('solicitudes')
-          .select('*')
-          .eq('estado', 'pendiente'); // Solo cargamos las pendientes para el contador
-          
-      if (error) {
-          console.error("Error al cargar solicitudes:", error);
-          return;
-      }
-      // Mapear los nombres de columna de la DB a la estructura local si es necesario
-      solicitudes.value = data; 
-  }
+    // Chequea si el usuario tiene una solicitud PENDIENTE para este curso (Inscripción o Baja)
+    const isUserPending = computed(() => (idCurso) => {
+        if (!userId.value) return false;
+
+        return solicitudes.value.some(s => 
+            s.user_id === userId.value && 
+            s.curso_id === idCurso && 
+            s.estado === 'pendiente'
+        );
+    });
+
+    // Combina los dos cheques para la vista Cursos.vue
+    const isUserInvolved = computed(() => (idUsuario, idCurso) => {
+        return isUserInvolvedInCourse.value(idCurso) || isUserPending.value(idCurso);
+    });
+
+    // Función de ayuda para obtener los cursos de un usuario
+    const getCursosByUserId = computed(() => (idUsuario) => {
+        if (!idUsuario) return [];
+        const userCursosIds = inscripciones.value[idUsuario] || [];
+        return cursos.value.filter(curso => userCursosIds.includes(curso.id));
+    });
 
 
-  // 🏆 NUEVA FUNCIÓN: Enviar Solicitud (INSERT)
-  async function sendSolicitud(userId, cursoId, tipo) {
-      // Verificar si ya existe una solicitud pendiente
-      const existing = solicitudes.value.find(s => 
-          s.user_id === userId && s.curso_id === cursoId && s.estado === 'pendiente'
-      );
+    // --- ACCIONES DE SUPABASE: REALTIME LISTENERS ---
 
-      if (existing) {
-          console.warn('Ya existe una solicitud pendiente para este curso.');
-          throw new Error('Ya tienes una solicitud pendiente para este curso.');
-      }
-      
-      const { data, error } = await supabase
-          .from('solicitudes') // <-- Insertar en la tabla 'solicitudes'
-          .insert({
-              user_id: userId, // ID del usuario autenticado
-              curso_id: cursoId, // ID del curso
-              tipo: tipo, // 'inscripcion_alumno' o 'inscripcion_profesor'
-              estado: 'pendiente' // Estado inicial
-          })
-          .select()
-          .single();
-          
-      if (error) {
-          console.error("Error al enviar solicitud:", error);
-          throw new Error(`Error al enviar solicitud a la base de datos: ${error.message}`);
-      }
-      
-      // Actualizar el store local: agregar la nueva solicitud
-      solicitudes.value.push(data);
-      console.log(`Solicitud de tipo ${tipo} enviada con éxito.`);
-      
-      // NOTA: Por ahora no hacemos una notificación aquí.
-  }
-
-  // Función para saber si el usuario ya tiene una solicitud pendiente o está inscrito
-  function isUserInvolved(userId, cursoId) {
-      // 1. Está inscrito o asignado (usando la simulación local por ahora)
-      if (inscripciones.value[userId] && inscripciones.value[userId].includes(cursoId)) {
-          return true;
-      }
-      // 2. Tiene una solicitud pendiente
-      return solicitudes.value.some(s => 
-          s.user_id === userId && 
-          s.curso_id === cursoId && 
-          s.estado === 'pendiente'
-      );
-  }
-
-
-  async function addCurso(newCursoData) {
-    const { data, error } = await supabase
-        .from('asesorias')
-        .insert({
-            nombre: newCursoData.nombre,
-            descripcion: newCursoData.descripcion, 
-            horario: newCursoData.horario, 
-            cupo_maximo: newCursoData.cupo,
-            id_profesor: newCursoData.profesorId 
-        })
-        .select()
-        .single();
+    const setupListeners = async () => {
+        isLoading.value = true;
         
-    if (error) {
-        console.error("Error al insertar curso:", error);
-        throw new Error(`Error al insertar en la base de datos: ${error.message}`);
-    }
-    
-    const newLocalCurso = {
-      ...newCursoData,
-      id: data.id, 
+        // 1. ASESORÍAS (Antes 'cursos')
+        if (asesoriasChannel) supabase.removeChannel(asesoriasChannel);
+        // Usamos el nombre de la tabla existente: 'asesorias'
+        asesoriasChannel = supabase.channel('public:asesorias')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'asesorias' }, (payload) => {
+                fetchDataAndProcess(); // Refresca los datos en caso de cambio
+            })
+            .subscribe();
+        
+        // 2. Solicitudes
+        if (solicitudesChannel) supabase.removeChannel(solicitudesChannel);
+        solicitudesChannel = supabase.channel('public:solicitudes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes' }, (payload) => {
+                fetchSolicitudes(); // Refresca las solicitudes
+            })
+            .subscribe();
+
+        // 3. Inscripciones
+        if (inscripcionesChannel) supabase.removeChannel(inscripcionesChannel);
+        inscripcionesChannel = supabase.channel('public:inscripciones')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'inscripciones' }, (payload) => {
+                fetchInscripciones(); // Refresca las inscripciones
+            })
+            .subscribe();
+
+        // Llamada inicial para cargar los datos
+        await Promise.all([fetchDataAndProcess(), fetchSolicitudes(), fetchInscripciones()]);
+        
+        isLoading.value = false;
+    };
+
+    /**
+     * Trae las asesorías, luego los nombres de los profesores y combina la información.
+     */
+    const fetchDataAndProcess = async () => {
+        const asesoriasData = await fetchAsesorias();
+        if (!asesoriasData) return;
+
+        const profesorIds = [...new Set(asesoriasData
+            .map(a => a.id_profesor)
+            .filter(id => id)
+        )];
+        
+        await fetchProfesoresNames(profesorIds);
+
+        // Mapear los datos de las asesorías para incluir el nombre del profesor
+        cursos.value = asesoriasData.map(curso => ({
+            ...curso,
+            // Asignar el nombre del profesor usando el ID guardado
+            profesorNombre: profesorNames.value[curso.id_profesor] || 'Sin asignar', 
+            profesorId: curso.id_profesor || null, // Asegura que el ID siga accesible
+        }));
+    };
+
+    /**
+     * Nueva función para obtener solo los nombres de los profesores.
+     * @param {string[]} ids - Array de IDs de profesores a buscar.
+     */
+    const fetchProfesoresNames = async (ids) => {
+        if (ids.length === 0) return;
+
+        // Asumimos que la tabla de perfiles se llama 'profiles' y tiene un campo 'username'
+        const { data, error } = await supabase
+            .from('usuarios') 
+            .select('id, nombre')
+            .in('id', ids);
+
+        if (error) {
+            console.error("Error fetching profesor names:", error);
+            // En caso de error, simplemente retornamos sin actualizar los nombres
+            return;
+        }
+
+        // Almacenar los nombres en el objeto profesorNames: { [id]: nombre }
+        const newNames = {};
+        data.forEach(p => {
+            newNames[p.id] = p.username;
+        });
+        profesorNames.value = { ...profesorNames.value, ...newNames };
+    };
+
+    // Funciones de fetch inicial (solo traemos datos brutos)
+    const fetchAsesorias = async () => { // Renombrada de fetchCursos
+        // CORRECCIÓN CLAVE: No se hace JOIN aquí, solo se trae la columna 'id_profesor'.
+        const { data, error } = await supabase
+            .from('asesorias') // Usamos el nombre de tabla correcto
+            .select('*, id_profesor'); 
+        
+        if (error) {
+            console.error("Error fetching asesorias:", error);
+            return null; 
+        }
+        return data; 
+    };
+
+    const fetchSolicitudes = async () => {
+        const { data, error } = await supabase
+            .from('solicitudes') // <--- VERIFICA ESTE NOMBRE
+            .select('*');
+        if (error) console.error("Error fetching solicitudes:", error); // <-- ¿Estás viendo este error en consola?
+        else solicitudes.value = data;
     };
     
-    cursos.value.push(newLocalCurso);
-    console.log(`Nuevo curso agregado y guardado en Supabase: ${newLocalCurso.nombre}`);
-  }
+    const fetchInscripciones = async () => {
+        // NOTA: Se asume que los campos en inscripciones son "userId" y "cursoId"
+        const { data, error } = await supabase 
+            .from('inscripciones')
+            .select('"userId", "cursoId"'); 
 
-  async function updateCurso(id, updatedData) {
-    const { error } = await supabase
-      .from('asesorias') 
-      .update({
-        nombre: updatedData.nombre, 
-        horario: updatedData.horario, 
-        cupo_maximo: updatedData.cupo, 
-        id_profesor: updatedData.profesorId,
-      })
-      .eq('id', id);
-      
-    if (error) {
-      console.error("Error de Supabase al actualizar:", error);
-      throw new Error(`Error al actualizar en la base de datos: ${error.message}`);
-    }
+        if (error) {
+            console.error("Error fetching inscripciones:", error);
+            return;
+        }
 
-    const index = cursos.value.findIndex(c => c.id === id);
-    if (index !== -1) {
-      cursos.value[index] = { 
-          ...cursos.value[index], 
-          ...updatedData,
-          cupo: updatedData.cupo
-      };
-      console.log(`Curso actualizado y guardado en Supabase: ${updatedData.nombre}`);
-    } else {
-      throw new Error("No se pudo encontrar el curso para actualizar localmente.");
-    }
-  }
+        // Reconstruir el objeto `inscripciones`
+        const tempInscripciones = {};
+        data.forEach(item => {
+            if (!tempInscripciones[item.userId]) {
+                tempInscripciones[item.userId] = [];
+            }
+            // Aseguramos que el cursoId sea numérico si en la tabla 'asesorias' es un INT
+            // Si en 'asesorias' es UUID/TEXT, omitir parseInt
+            tempInscripciones[item.userId].push(item.cursoId); 
+        });
+        inscripciones.value = tempInscripciones;
+    };
 
-  return { 
-    cursos, 
-    isLoading,
-    solicitudes, 
-    inscripciones,
-    getCursosByUserId, 
-    isUserInvolved,
-    sendSolicitud,
-    addCurso,
-    updateCurso,
-    fetchCursos,
-    fetchSolicitudes,
-  }
-})
+
+    // --- ACCIONES DE NEGOCIO ---
+
+    /**
+     * Envía una nueva solicitud de inscripción/asignación/baja.
+     * @param {string} userId - ID del usuario.
+     * @param {string} cursoId - ID del curso (asesoria).
+     * @param {('inscripcion_alumno'|'inscripcion_profesor'|'baja_alumno'|'baja_profesor')} tipo - Tipo de solicitud.
+     */
+    const sendSolicitud = async (userId, cursoId, tipo) => {
+        // Validación de duplicados PENDIENTE
+        const exists = solicitudes.value.some(s => 
+            s.user_id === userId && 
+            s.curso_id === cursoId && 
+            s.estado === 'pendiente' &&
+            (s.tipo === tipo || s.tipo.includes(tipo.split('_')[0]))
+        );
+
+        if (exists) {
+            throw new Error("Ya existe una solicitud pendiente de este curso. Espere la aprobación o rechazo.");
+        }
+
+        const { error } = await supabase
+            .from('solicitudes')
+            .insert({
+                user_id: userId,
+                curso_id: cursoId, // Asumimos que la columna es curso_id
+                tipo: tipo,
+                estado: 'pendiente',
+            });
+
+        if (error) throw new Error(error.message);
+    };
+
+    /**
+     * Aprueba una solicitud, actualiza el estado y gestiona la tabla 'inscripciones'.
+     * @param {object} solicitud - Objeto completo de la solicitud.
+     */
+    const approveSolicitud = async (solicitud) => {
+        // En Supabase, usamos una función RPC para simular una transacción atómica.
+        const { error } = await supabase.rpc('handle_solicitud_approval', {
+            solicitud_id: solicitud.id,
+            user_id_in: solicitud.user_id,
+            curso_id_in: solicitud.curso_id,
+            tipo_in: solicitud.tipo 
+        });
+
+        if (error) {
+            console.error("Error al aprobar la solicitud (RPC):", error);
+            throw new Error(`Fallo en la transacción de aprobación: ${error.message}`);
+        }
+    };
+    
+    /**
+     * Rechaza una solicitud actualizando su estado.
+     * @param {string} solicitudId - ID de la solicitud.
+     */
+    const rejectSolicitud = async (solicitudId) => {
+        const { error } = await supabase
+            .from('solicitudes')
+            .update({ 
+                estado: 'rechazada',
+            })
+            .eq('id', solicitudId);
+
+        if (error) {
+            console.error("Error al rechazar la solicitud:", error);
+            throw new Error(`Fallo al actualizar la solicitud a 'rechazada': ${error.message}`);
+        }
+    };
+
+    /**
+     * Actualiza los campos editables de un curso (asesoria).
+     * @param {number | string} cursoId - ID del curso a actualizar.
+     * @param {object} updatedFields - Objeto con los campos a actualizar (horario, cupo, profesor, profesorId).
+     */
+    const updateAsesoria = async (cursoId, updatedFields) => {
+        console.log(`Intentando actualizar asesoria ID ${cursoId} con campos:`, updatedFields);
+        
+        // La corrección anterior del nombre de la columna para la actualización es correcta:
+        const payload = {
+            horario: updatedFields.horario,
+            cupo_maximo: updatedFields.cupo, // Se espera 'cupo' de la vista, se mapea a 'cupo_maximo' de la DB
+            id_profesor: updatedFields.profesorId || null // Se espera 'profesorId' de la vista, se mapea a 'id_profesor' de la DB
+        };
+
+        const { data, error } = await supabase
+            .from('asesorias')
+            .update(payload)
+            .eq('id', cursoId) // Asumiendo que el campo ID de la tabla 'asesorias' es 'id'
+            .select(); // Opcional: devolver el registro actualizado
+
+        if (error) {
+            console.error("Error al actualizar la asesoria:", error);
+            throw new Error(`No se pudo actualizar el curso: ${error.message}`);
+        }
+        
+        // Después de la actualización, refrescamos los datos.
+        fetchDataAndProcess(); 
+        
+        return data;
+    };
+
+
+    // Al limpiar la store, detenemos los listeners
+    const $reset = () => {
+        if (asesoriasChannel) supabase.removeChannel(asesoriasChannel);
+        if (solicitudesChannel) supabase.removeChannel(solicitudesChannel);
+        if (inscripcionesChannel) supabase.removeChannel(inscripcionesChannel);
+        cursos.value = [];
+        solicitudes.value = [];
+        inscripciones.value = {};
+        isLoading.value = false;
+        profesorNames.value = {};
+    };
+
+
+    return {
+        cursos, // Mantiene el nombre 'cursos' para compatibilidad con las vistas
+        solicitudes,
+        inscripciones,
+        isLoading,
+        isUserInvolved,
+        isUserInvolvedInCourse,
+        isUserPending,
+        getCursosByUserId,
+        fetchCursos: setupListeners, // Mantenemos el nombre de la función exportada
+        fetchSolicitudes: setupListeners,
+        sendSolicitud,
+        approveSolicitud,
+        rejectSolicitud,
+        updateCurso: updateAsesoria, // Alias para usar en las vistas (EditarAsesoria.vue)
+        $reset,
+    };
+});

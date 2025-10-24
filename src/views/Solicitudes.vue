@@ -13,6 +13,19 @@
             <p>Aquí podrá revisar, aprobar o rechazar las solicitudes de alumnos (inscripción/baja) y profesores (asignación docente).</p>
         </div>
 
+        <!-- Notificación Temporal -->
+        <div 
+            v-if="notificationMessage" 
+            :class="[
+                'p-4 mb-4 rounded-lg transition-all duration-300 ease-in-out',
+                notificationType === 'success' ? 'bg-green-100 border-l-4 border-green-500 text-green-700' : 
+                notificationType === 'error' ? 'bg-red-100 border-l-4 border-red-500 text-red-700' : 'bg-blue-100 border-l-4 border-blue-500 text-blue-700'
+            ]"
+            role="alert"
+        >
+            <p class="font-medium">{{ notificationMessage }}</p>
+        </div>
+
         <!-- Contenedor para la lista de solicitudes -->
         <div v-if="isLoading" class="text-center py-10">
             <svg class="animate-spin h-8 w-8 text-blue-500 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -70,7 +83,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue'; // Importamos 'ref'
 import { useCursosStore } from '@/stores/cursos';
 import { useAuthStore } from '@/stores/auth';
 import { storeToRefs } from 'pinia';
@@ -79,6 +92,28 @@ const cursosStore = useCursosStore();
 const authStore = useAuthStore();
 
 const { solicitudes: todasSolicitudes, isLoading, cursos } = storeToRefs(cursosStore);
+
+// --- Estado local para notificaciones (Reemplazo de alert()) ---
+const notificationMessage = ref(null);
+const notificationType = ref(null);
+let notificationTimeout = null;
+
+const showNotification = (message, type = 'success') => {
+    notificationMessage.value = message;
+    notificationType.value = type;
+    
+    // Limpia el timeout anterior para que no se superpongan
+    if (notificationTimeout) {
+        clearTimeout(notificationTimeout);
+    }
+
+    // Oculta la notificación después de 4 segundos
+    notificationTimeout = setTimeout(() => {
+        notificationMessage.value = null;
+        notificationType.value = null;
+    }, 4000);
+};
+
 
 // Filtrar las solicitudes para mostrar solo las pendientes
 const solicitudesPendientes = computed(() => {
@@ -121,32 +156,61 @@ const formatDate = (dateString) => {
 }
 
 
-// --- Lógica de Aprobación/Rechazo (Falta implementar en la store) ---
+// --- Lógica de Aprobación/Rechazo ---
 
-const handleApproval = (solicitud) => {
-    // Lógica pendiente en cursosStore para:
-    // 1. Actualizar solicitud a 'aprobada'.
-    // 2. Insertar/Eliminar la inscripción/asignación en la tabla correspondiente.
-    alert(`Aprobando solicitud ${solicitud.id} para el curso ${getCursoName(solicitud.curso_id)}...`);
-    // cursosStore.approveSolicitud(solicitud);
+const handleApproval = async (solicitud) => {
+    // Reemplazamos window.confirm por una simulación de modal (idealmente usar un componente real)
+    if (!window.confirm(`¿Está seguro de aprobar la solicitud ${solicitud.id} para ${getCursoName(solicitud.curso_id)}?`)) {
+        return;
+    }
+
+    try {
+        await cursosStore.approveSolicitud(solicitud);
+        showNotification('Solicitud aprobada exitosamente.', 'success'); 
+    } catch (error) {
+        console.error("Error al aprobar:", error);
+        showNotification(`Error al aprobar: ${error.message}`, 'error');
+    }
 }
 
-const handleRejection = (solicitudId) => {
-    // Lógica pendiente en cursosStore para:
-    // 1. Actualizar solicitud a 'rechazada'.
-    alert(`Rechazando solicitud ${solicitudId}...`);
-    // cursosStore.rejectSolicitud(solicitudId);
+const handleRejection = async (solicitudId) => {
+    // Reemplazamos window.confirm por una simulación de modal (idealmente usar un componente real)
+    if (!window.confirm(`¿Está seguro de rechazar la solicitud ${solicitudId}?`)) {
+        return;
+    }
+
+    try {
+        await cursosStore.rejectSolicitud(solicitudId);
+        showNotification('Solicitud rechazada exitosamente.', 'success');
+    } catch (error) {
+        console.error("Error al rechazar:", error);
+        showNotification(`Error al rechazar: ${error.message}`, 'error');
+    }
 }
+
 
 onMounted(() => {
     // Si no es admin, no cargamos nada
     if (!authStore.isAdmin) return; 
 
-    // Aseguramos que los cursos estén cargados para poder obtener sus nombres
-    if (cursos.value.length === 0) {
-        cursosStore.fetchCursos();
-    }
-    // Cargamos las solicitudes
-    cursosStore.fetchSolicitudes();
+    // Llamamos a fetchCursos (que mapea a setupListeners)
+    // Esto fuerza la carga inicial de TODOS los datos (cursos, solicitudes, inscripciones)
+    // y configura los listeners de Realtime.
+    cursosStore.fetchCursos(); 
 });
 </script>
+<style scoped>
+/* Estilos necesarios para la animación del spinner */
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+</style>

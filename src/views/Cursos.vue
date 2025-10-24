@@ -43,11 +43,11 @@
           </div>
           <div>
             <p class="font-medium text-gray-700">Profesor:</p>
-            <p class="text-gray-500">{{ curso.profesor }}</p>
+            <p class="text-gray-500">{{ curso.profesorNombre}}</p>
           </div>
           <div>
             <p class="font-medium text-gray-700">Cupo:</p>
-            <p class="text-gray-500">{{ curso.cupo }} estudiantes</p>
+            <p class="text-gray-500">{{ curso.cupo_maximo }} estudiantes</p>
           </div>
         </div>
 
