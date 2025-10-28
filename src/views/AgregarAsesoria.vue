@@ -51,8 +51,8 @@
           />
         </div>
 
-<div>
-          <label for="profesor" class="block text-sm font-medium text-gray-700">Profesor Asignado (ID Real)</label>
+        <div>
+          <label for="profesor" class="block text-sm font-medium text-gray-700">Profesor Asignado (UUID)</label>
           <select
             id="profesor"
             v-model="newCurso.profesorId"
@@ -60,8 +60,9 @@
           >
             <option :value="null">-- Sin asignar --</option>
             
-            <option value="9f61b4aa-2a85-451e-bdbf-ea848f760d15">Profesor (ID: 9f6...)</option>
-            <option value="UUID_DEL_OTRO_PROFESOR">Otro Profesor (ID: UUID...)</option>
+            <!-- NOTA: Aquí debes listar los profesores reales obtenidos del store -->
+            <option value="9f61b4aa-2a85-451e-bdbf-ea848f760d15">Profesor Prueba 1</option>
+            <option value="1f23c4d5-56e7-890a-b12c-d34e56f7890a">Profesor Prueba 2</option>
             
           </select>
         </div>
@@ -102,36 +103,24 @@ const newCurso = ref({
   descripcion: '',
   horario: '',
   cupo: 1,
-  profesorId: null, // ID del profesor
-  profesor: '',    // Nombre del profesor (lo determinaremos al guardar)
+  profesorId: null, // ID del profesor (UUID)
 });
 
 const message = ref(null);
 const messageClass = ref('');
 
-// Función simulada para obtener el nombre del profesor por ID
-const getProfesorById = (id) => {
-    // NOTA: Esta es una simulación. En producción, harías una consulta a la tabla 'usuarios'.
-    if (id === 2) return { nombre: 'Dr. García' };
-    if (id === 4) return { nombre: 'Prof. Ana López' };
-    return { nombre: 'Sin asignar' };
-};
-
 // 🏆 FUNCIÓN PRINCIPAL ASÍNCRONA PARA GUARDAR EN SUPABASE
 const submitForm = async () => { 
-  // 1. Determinar el nombre del profesor basado en el ID
-  const profesorData = getProfesorById(newCurso.value.profesorId);
-  newCurso.value.profesor = profesorData.nombre;
+  // Limpiamos mensajes
+  message.value = null;
+  messageClass.value = '';
   
   try {
-    // 2. Preparamos el objeto para guardar
-    const cursoToSave = { ...newCurso.value };
-
-    // 3. Llamar a la acción asíncrona del store y esperar la inserción en Supabase
-    await cursosStore.addCurso(cursoToSave); 
+    // La acción addCurso en el Store espera el objeto newCurso.value
+    await cursosStore.addCurso(newCurso.value); 
 
     // 4. Mostrar mensaje de éxito
-    message.value = `¡Curso "${cursoToSave.nombre}" agregado con éxito!`;
+    message.value = `¡Curso "${newCurso.value.nombre}" agregado con éxito!`;
     messageClass.value = 'bg-green-100 text-green-800';
 
     // 5. Redirigir
@@ -140,6 +129,7 @@ const submitForm = async () => {
     }, 1500);
 
   } catch (error) {
+    // El error.message viene del error que lanzamos en el Store
     message.value = `Error al guardar el curso: ${error.message}`;
     messageClass.value = 'bg-red-100 text-red-800';
     console.error("Error al guardar:", error);

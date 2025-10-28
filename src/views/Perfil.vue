@@ -1,4 +1,4 @@
 <template>
-<h1>Pefril del usuario</h1>
+  <h1>ola</h1>
 </template>
 <script></script>

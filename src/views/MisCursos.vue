@@ -2,7 +2,7 @@
   <div class="p-6">
     <!-- Mensaje de bienvenida -->
     <h1 class="text-3xl font-bold text-gray-800 mb-2">
-      Hola, {{ authStore.user?.name || 'Usuario' }}!
+      Hola, {{ authStore.userName }}!
     </h1>
     
     <p class="text-lg text-gray-600 mb-8">
@@ -10,7 +10,6 @@
       <span v-if="authStore.isStudent" class="inline-block px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">Alumno</span>
       <span v-else-if="authStore.isProfessor" class="inline-block px-3 py-1 text-sm font-semibold rounded-full bg-blue-100 text-blue-800">Profesor</span>
       <span v-else-if="authStore.isAdmin" class="inline-block px-3 py-1 text-sm font-semibold rounded-full bg-red-100 text-red-800">Administrador</span>
-      <span v-else class="inline-block px-3 py-1 text-sm font-semibold rounded-full bg-gray-100 text-gray-600">Invitado</span>
     </p>
 
     <!-- --- SECCIÓN DE CURSOS ASIGNADOS (Alumno/Profesor) --- -->
@@ -20,13 +19,19 @@
         </h2>
 
         <div v-if="isLoading" class="p-4 bg-yellow-50 rounded-lg text-yellow-700">Cargando cursos...</div>
-        
+
+        <div v-if="cursosStore.error" class="p-4 bg-red-50 text-red-700 rounded-lg">
+            Error al cargar los cursos: {{ cursosStore.error.message || cursosStore.error }}
+        </div>
+
+        <!-- Usamos el nuevo estado 'misCursos' de la store -->
         <div v-else-if="misCursos.length === 0" class="p-4 bg-blue-50 border-l-4 border-blue-400 text-blue-700 rounded-lg">
             <p v-if="authStore.isStudent">No estás inscrito en ninguna asesoría. ¡Explora las disponibles!</p>
             <p v-else-if="authStore.isProfessor">Actualmente no tienes cursos asignados. Revisa el listado de solicitudes pendientes.</p>
         </div>
 
         <div v-else class="space-y-4">
+            <!-- Iteramos sobre el estado 'misCursos' -->
             <div 
                 v-for="curso in misCursos" 
                 :key="curso.id"
@@ -37,7 +42,8 @@
                 
                 <div class="mt-3 text-sm grid grid-cols-2 gap-2">
                     <p><strong>Horario:</strong> {{ curso.horario }}</p>
-                    <p><strong>Profesor:</strong> {{ curso.profesor }}</p>
+                    <!-- Usamos el campo corregido 'profesorNombre' -->
+                    <p><strong>Profesor:</strong> {{ curso.nombreProfesor }}</p>
                 </div>
             </div>
         </div>
@@ -55,7 +61,7 @@
             <div class="bg-orange-50 border-l-4 border-orange-400 p-4 rounded-lg shadow-md">
                 <p class="text-lg font-semibold text-orange-800">Solicitudes Pendientes:</p>
                 <!-- Asume que ya cargamos las solicitudes en la store -->
-                <p class="text-3xl text-orange-600 font-extrabold">{{ cursosStore.solicitudes.length }}</p>
+                <p class="text-3xl text-orange-600 font-extrabold">{{ cursosStore.solicitudes?.length || 0 }}</p>
             </div>
         </div>
         
@@ -73,7 +79,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue';
+// IMPORTACIÓN CORREGIDA: Agregamos 'watch'
+import { computed, onMounted, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useCursosStore } from '@/stores/cursos';
 import { storeToRefs } from 'pinia';
@@ -81,30 +88,36 @@ import { storeToRefs } from 'pinia';
 const authStore = useAuthStore();
 const cursosStore = useCursosStore();
 
-// Desestructurar estado del store
-const { isLoading, cursos } = storeToRefs(cursosStore);
+// CORRECCIÓN: Desestructuramos 'loading' y lo renombramos a 'isLoading'
+// para que coincida con el uso en el <template>.
+const { loading: isLoading, cursos, misCursos } = storeToRefs(cursosStore);
 
 // ID del usuario actual (UUID del authStore)
 const currentUserId = computed(() => authStore.user?.id);
 
-// Computada para obtener los cursos del usuario
-const misCursos = computed(() => {
-    if (!currentUserId.value) return [];
-    
-    // Aquí usamos la función que desarrollamos previamente
-    return cursosStore.getCursosByUserId(currentUserId.value);
+// Observar el cambio de userId y la carga inicial de todos los cursos
+// para disparar la carga de 'Mis Cursos'.
+watch(currentUserId, (newId) => {
+    if (newId) {
+        // No es necesario pasar newId, ya que fetchMisCursos lo obtiene del authStore
+        cursosStore.fetchMisCursos(); 
+    }
+}, { immediate: true });
+
+watch(cursos, (newCursos) => {
+    // Si los cursos generales se cargan o cambian, y el usuario existe, recargamos mis cursos.
+    if (newCursos.length > 0 && currentUserId.value) {
+        // No es necesario pasar currentUserId.value, ya que fetchMisCursos lo obtiene del authStore
+        cursosStore.fetchMisCursos(); 
+    }
 });
 
 
-onMounted(() => {
-    // Aseguramos que los cursos y solicitudes estén cargados al entrar a la vista
-    if (cursos.value.length === 0) {
-        cursosStore.fetchCursos();
-    }
-    cursosStore.fetchSolicitudes();
+// CORRECCIÓN 1: Eliminamos el computed asíncrono que causaba problemas.
+// CORRECCIÓN 2: Corregir la sintaxis de onMounted anidado que causaba 'is not a function'.
+onMounted(async () => {
+    // Esta llamada inicia los listeners y la carga inicial de TODOS los cursos.
+    // Una vez que 'cursos' se cargue, el 'watch(cursos)' de arriba llamará a 'fetchMisCursos'.
+    await cursosStore.fetchCursos();
 });
 </script>
-
-<style scoped>
-/* Estilos adicionales si fueran necesarios */
-</style>

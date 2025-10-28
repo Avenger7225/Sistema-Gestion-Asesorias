@@ -62,30 +62,42 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { loginWithSupabase } from '@/services/authServices'
+import { supabase } from '@/supabase'  // 👈 IMPORTACIÓN NECESARIA
 
 const username = ref('')
 const password = ref('')
 const showPassword = ref(false)
 const Message = ref('')
+const loading = ref(false) // 👈 Faltaba esto
+
 const router = useRouter()
 const authStore = useAuthStore()
 
 const handleLogin = async () => {
-  Message.value = ''
+  loading.value = true
+  Message.value = ""
 
-  try {
-    const user = await loginWithSupabase(username.value, password.value)
+  console.log("[LOGIN] Intentando iniciar sesión...")
 
-    // Redirigir según rol
-    if (user.rol === 'admin') {
-      router.push({ name: 'dashboard' })
-    } else {
-      router.push({ name: 'dashboard' })
-    }
-  } catch (error) {
-    Message.value = error.message || 'Error al iniciar sesión.'
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: username.value,  // 👈 AQUÍ ESTABA EL ERROR (antes usabas email.value)
+    password: password.value,
+  })
+
+  if (error) {
+    loading.value = false
+    Message.value = "Usuario o contraseña incorrectos"
+    console.error("[LOGIN ERROR]:", error.message)
+    return
   }
+
+  console.log("[LOGIN] Sesión iniciada correctamente ✅")
+
+  // ✅ Inicializamos authStore antes de redirigir
+  await authStore.initAuth()
+
+  router.push('/dashboard')
+  loading.value = false
 }
 </script>
 

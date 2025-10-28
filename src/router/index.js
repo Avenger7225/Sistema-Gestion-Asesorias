@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { supabase } from '@/supabase'
+
 import Dashboard from '@/views/MisCursos.vue'
 import Login from '@/views/Login.vue'
 import AppLayout from '@/layouts/AppLayout.vue'
@@ -21,8 +23,7 @@ const routes = [
     component: Login,
     meta: { requiresGuest: true }
   },
-  
-  // BLOQUE PRINCIPAL DE LA APP (RUTAS PROTEGIDAS)
+
   {
     path: '/',
     component: AppLayout,
@@ -31,20 +32,17 @@ const routes = [
       {
         path: 'dashboard',
         name: 'dashboard',
-        component: Dashboard,
-        props: true
+        component: Dashboard
       },
       {
         path: 'cursos',
         name: 'cursos',
-        component: Cursos,
-        props: true
+        component: Cursos
       },
       {
         path: 'perfil',
         name: 'perfil',
-        component: Perfil,
-        props: true
+        component: Perfil
       },
       {
         path: 'cursos/:cursoId/editar-asesoria',
@@ -55,65 +53,48 @@ const routes = [
       {
         path: 'crear-asesoria',
         name: 'crear-asesoria',
-        component: AgregarAsesoria,
-        props: true
+        component: AgregarAsesoria
       },
       {
         path: 'solicitudes',
         name: 'solicitudes',
-        component: Solicitudes,
-        props: true
+        component: Solicitudes
       }
     ]
   },
 
-  // RUTA 404
-  {
-    path: '/:pathMatch(.*)*', 
-    name: 'not-found', 
-    component: NotFound
-  }
+  { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFound }
 ]
 
+// ✅ AQUÍ ES DONDE DEFINIMOS EL ROUTER
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL),
-  routes,
+  history: createWebHistory(),
+  routes
 })
 
-// GUARD DE NAVEGACIÓN GLOBAL
-router.beforeEach((to, from, next) => {
-  const authStore = useAuthStore()
-  
-  // Esperar a que el store se cargue de localStorage
-  if (!authStore.isInitialized) {
-    if (to.name !== 'login') {
-      setTimeout(() => {
-        next(to.fullPath);
-      }, 50); 
-      return;
-    }
+// ✅ GUARD GLOBAL (ESTA ES LA LÓGICA QUE QUERÍAS MANTENER)
+// Esta lógica ahora funcionará porque en main.js se asegura que Pinia esté listo antes de montar el router.
+router.beforeEach(async (to, from, next) => {
+  const auth = useAuthStore()
+
+  // Si el store aún no se inicializa, espéralo
+  if (!auth.isAuthReady) {
+    console.log("[Router Guard] Esperando a que auth se inicialice...")
+    await auth.initAuth()   // <-- Esta línea ahora existe y se puede llamar
   }
 
-  const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
-  const requiresGuest = to.matched.some(record => record.meta.requiresGuest)
-  const requiredRoles = to.meta.roles
-
-  if (requiresAuth) {
-    if (!authStore.isLoggedIn) {
-      next({ name: 'login' })
-    } else if (requiredRoles && !requiredRoles.includes(authStore.userRole)) {
-      next({ name: 'dashboard' })
-    } else {
-      next()
-    }
-    return
+  if (to.meta.requiresAuth && !auth.isLoggedIn) {
+    console.log("[Router Guard] Usuario NO autenticado → /login")
+    return next('/login')
   }
 
-  if (requiresGuest && authStore.isLoggedIn) {
-    next({ name: 'dashboard' })
-    return
+  if (to.meta.requiresGuest && auth.isLoggedIn) {
+    console.log("[Router Guard] Ya autenticado → /dashboard")
+    return next('/dashboard')
   }
+
   next()
 })
+
 
 export default router

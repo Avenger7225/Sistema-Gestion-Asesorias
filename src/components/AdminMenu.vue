@@ -1,26 +1,30 @@
 <template>
   <header class="app-header">
     <nav class="nav-menu">
-      <router-link to="dashboard" class="nav-link">Inicio</router-link>
-      <router-link to="cursos" class="nav-link">Asesorias Disponibles</router-link>
+      <router-link to="/dashboard" class="nav-link">Inicio</router-link>
+      <router-link to="/cursos" class="nav-link">Asesorías Disponibles</router-link>
       <router-link to="/perfil" class="nav-link">Perfil</router-link>
-      <span v-if="authStore.isAdmin" class="tag-admin">Administrador</span>
+
+      <span class="tag-admin">Administrador</span>
+
       <button @click="logout" class="logout-button">Salir</button>
     </nav>
   </header>
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router';
-import { useAuthStore } from '@/stores/auth';
+import { useRouter } from "vue-router"
+import { useAuthStore } from "@/stores/auth"
+import { supabase } from '@/supabase';
 
-const router = useRouter();
-const authStore = useAuthStore();
+const router = useRouter()
+const authStore = useAuthStore()
 
-const logout = () => {
-  authStore.logout();
-  router.push('/login');
-};
+const logout = async () => {
+  await supabase.auth.signOut()
+  this.user = null
+  this.isAuthReady = false
+}
 </script>
 
 <style scoped>
