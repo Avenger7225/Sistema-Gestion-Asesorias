@@ -16,15 +16,16 @@ export const useCursosStore = defineStore('cursos', () => {
 
     // ======== HELPERS ========
     const isUserInvolved = (userid, cursoid) => {
-        const inscrito = (inscripciones.value[userid] || []).includes(Number(cursoid));
+        const inscrito = (inscripciones.value[userid] || []).includes(cursoid); // <-- QUITAMOS Number()
         if (inscrito) return true;
 
+        // 2. Verificar si tiene solicitud pendiente
         const pendiente = solicitudes.value.some(solicitud =>
+            // Ambas comparaciones ahora son entre Strings (UUIDs), lo cual es correcto.
             solicitud.user_id === userid &&
-            solicitud.curso_id === Number(cursoid) &&
+            solicitud.curso_id === cursoid && // <-- QUITAMOS Number()
             solicitud.estado_solicitud === 'pendiente'
         );
-
         return pendiente;
     }
 
@@ -77,13 +78,14 @@ export const useCursosStore = defineStore('cursos', () => {
 
             const newInscripciones = {}
 
-            data.forEach(inscripcion => {
-                const userid = inscripcion.userid;
-                const cursoid = inscripcion.cursoid;
+    data.forEach(inscripcion => {
+        const userid = inscripcion.userid;
+        const cursoid = inscripcion.cursoid;
 
-                if (!newInscripciones[userid]) newInscripciones[userid] = [];
-                if (cursoid) newInscripciones[userid].push(Number(cursoid));
-            })
+        if (!newInscripciones[userid]) newInscripciones[userid] = [];
+        // ❌ ¡Quitamos Number() si cursoid es un UUID!
+        if (cursoid) newInscripciones[userid].push(cursoid); 
+    })
 
             inscripciones.value = newInscripciones
 
@@ -140,26 +142,30 @@ export const useCursosStore = defineStore('cursos', () => {
     // ✅ Solicitudes pendientes
     // -------------------------------------------------------------
     const fetchSolicitudes = async () => {
-        try {
-            const { data, error: fetchError } = await supabase
-                .from('solicitudes')
-                .select(`
-                    *,
-                    curso:curso_id(nombre),
-                    usuario:user_id(nombre)
-                `)
+    try {
+        const { data, error: fetchError } = await supabase
+            .from('solicitudes')
+            .select(`
+                *,
+                curso:curso_id(nombre),
+                usuario:user_id(nombre) // <-- Mantenemos este join para el nombre del Admin
+            `)
 
-            if (fetchError) throw fetchError
+        if (fetchError) throw fetchError
 
-            solicitudes.value = data.map(solicitud => ({
-                ...solicitud,
-                cursoNombre: solicitud.curso?.nombre || 'Curso desconocido',
-                usuarioNombre: solicitud.usuario?.nombre || 'Usuario desconocido',
-            }))
+        solicitudes.value = data.map(solicitud => ({
+            ...solicitud,
+            // ⚠️ El campo solicitud.user_id ahora es el ID (UUID) de la solicitud en la DB.
+            // Si el join oculta el user_id original, debes pedirlo así: user_id!inner(id, nombre)
+            // Pero asumiremos que al pedir el * (asterisco), el user_id del root se mantiene.
+            
+            cursoNombre: solicitud.curso?.nombre || 'Curso desconocido',
+            usuarioNombre: solicitud.usuario?.nombre || 'Usuario desconocido',
+        }))
 
-        } catch (err) {
-            console.error('❌ Error fetchSolicitudes:', err)
-        }
+    } catch (err) {
+        console.error('❌ Error fetchSolicitudes:', err)
+    }
     }
 
 

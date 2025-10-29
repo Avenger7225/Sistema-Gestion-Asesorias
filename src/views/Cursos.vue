@@ -183,12 +183,17 @@ const isUserInvolved = (cursoId) => {
 }
 
 const handleInscription = async (cursoId, cursoNombre) => {
-  const tipo = authStore.isStudent ? 'inscripcion_alumno' : 'inscripcion_profesor'
+// Ajuste la variable 'tipo' para que use 'asignacion_profesor' si es un profesor.
+  const tipo = authStore.isStudent 
+      ? 'inscripcion_alumno' 
+      : 'asignacion_profesor' // <-- CAMBIO AQUÍ
   
   try {
       if (userId.value) {
         await cursosStore.sendSolicitud(userId.value, cursoId, tipo)
-        alert(`¡Solicitud de ${tipo.split('_')[0]} enviada para el curso "${cursoNombre}"! El administrador debe aprobarla.`)
+        // También ajusto el mensaje para que sea más claro
+        const tipo_display = authStore.isStudent ? 'Inscripción' : 'Asignación Docente'
+        alert(`¡Solicitud de ${tipo_display} enviada para el curso "${cursoNombre}"! El administrador debe aprobarla.`)
       } else {
         console.error("No se pudo enviar la solicitud: ID de usuario no disponible.")
       }
