@@ -57,12 +57,12 @@
 
             <div>
               <p class="text-base font-semibold text-gray-700">
-                {{ formatTipo(solicitud.tipo) }}:
-                <span class="text-blue-600">{{ getCursoName(solicitud.curso_id) }}</span>
+                {{ formatTipo(solicitud.solicitud_tipo) }}:
+                <span class="text-blue-600">{{ solicitud.cursoNombre }}</span>
               </p>
 
               <p class="text-sm text-gray-600 mt-1">
-                Usuario: <span class="font-medium">{{ solicitud.user_nombre || "Sin nombre" }}</span>
+                Usuario: <span class="font-medium">{{ solicitud.usuarioNombre || "Sin nombre" }}</span>
                 <span class="text-xs text-gray-400">({{ formatDate(solicitud.created_at) }})</span>
               </p>
             </div>
@@ -141,12 +141,15 @@ const handleApproval = async (solicitud) => {
   if (!confirm("¿Aprobar esta solicitud?")) return;
   await cursosStore.approveSolicitud(solicitud);
   showNotification("Solicitud aprobada ✅", "success");
+  await cursosStore.fetchSolicitudes();
+  console.log('Aprobando solicitud:', solicitud)
 };
 
 const handleRejection = async (id) => {
   if (!confirm("¿Rechazar esta solicitud?")) return;
   await cursosStore.rejectSolicitud(id);
   showNotification("Solicitud rechazada ❌", "error");
+  await cursosStore.fetchSolicitudes();
 };
 
 onMounted(() => {
