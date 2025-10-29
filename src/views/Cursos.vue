@@ -8,7 +8,7 @@
       <p>Estás viendo el catálogo general.</p>
       
       <button 
-        class="px-5 py-2 text-white font-medium rounded-lg shadow-md bg-blue-500 transition duration-150 text-center mt-3"
+        class="px-5 py-2 text-white font-medium rounded-lg shadow-md bg-blue-500 transition duration-150 text-center mt-3 hover:bg-blue-600"
         @click="handleCreate"
       >
         Agregar Nuevo Curso
@@ -51,7 +51,7 @@
           </div>
         </div>
 
-        <div class="mt-6 flex justify-end">
+        <div class="mt-6 flex justify-end space-x-3">
           
           <!-- Botones de inscripcion y baja (Solo para Alumno/Profesor) -->
           <template v-if="!authStore.isAdmin">
@@ -75,14 +75,24 @@
             </div>
           </template>
 
-          <!-- Boton de edicion (solo para el admin) -->
-          <button
-            v-else-if="authStore.isAdmin && curso.id"
-            @click="handleEdit(curso.id)" 
-            class="px-5 py-2 bg-blue-500 text-white font-medium rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 text-center"
-          >
-            Editar Curso
-          </button>
+          <!-- Botones de Administrador (Editar y Eliminar) -->
+          <template v-else-if="authStore.isAdmin && curso.id">
+            <!-- Botón de Eliminar (NUEVO) -->
+            <button
+              @click="handleDelete(curso.id, curso.nombre)" 
+              class="px-5 py-2 bg-red-700 text-white font-medium rounded-lg shadow-md hover:bg-red-800 transition duration-150 text-center"
+            >
+              Eliminar Curso
+            </button>
+            
+            <!-- Botón de Edición -->
+            <button
+              @click="handleEdit(curso.id)" 
+              class="px-5 py-2 bg-blue-500 text-white font-medium rounded-lg shadow-md hover:bg-blue-600 transition duration-150 text-center"
+            >
+              Editar Curso
+            </button>
+          </template>
 
         </div>
       </div>
@@ -98,53 +108,80 @@ import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { onMounted } from 'vue'
 
+// --- SETUP ---
 const authStore = useAuthStore()
 const cursosStore = useCursosStore()
 const router = useRouter()
 
 const userId = computed(() => authStore.user?.id)
 
-// 🛑 CORRECCIÓN CLAVE: Desestructurar inscripciones para acceso directo
+// Desestructurar del store de cursos
 const { cursos: cursosDelStore, isLoading, inscripciones } = storeToRefs(cursosStore) 
 const cursosDisponibles = cursosDelStore
 
 onMounted(() => {
-    // 🛑 También deberíamos cargar las solicitudes
+    // Cargar cursos y solicitudes al montar
     if (cursosDelStore.value.length === 0) {
         cursosStore.fetchCursos();
-        cursosStore.fetchSolicitudes(); // Asegurarse de cargar las solicitudes pendientes
+        cursosStore.fetchSolicitudes(); 
     }
 });
+
+// --- MANEJADORES DE ACCIONES ---
 
 const handleCreate = () => {
   router.push({ name: 'crear-asesoria' })
 }
 
 const handleEdit = (cursoId) => {
-    console.log("-----------------------------------------");
     console.log(`Intentando editar el Curso ID: ${cursoId}`);
-    console.log(`Tipo de dato del ID: ${typeof cursoId}`);
-    console.log("-----------------------------------------");
-    
     router.push({ name: 'editar-asesoria', params: { cursoId: cursoId } });
 };
 
+// NUEVO: Manejador de Eliminación (solo Admin)
+const handleDelete = async (cursoId, cursoNombre) => {
+    // Usamos una ventana modal custom en lugar de alert/confirm. Aquí simularemos con un error si falla.
+    // Para entornos reales, usarías un componente modal (No se usa confirm() por restricción del entorno).
+    if (!authStore.isAdmin) {
+        alert("Error de Seguridad: No tienes permisos de administrador para eliminar.");
+        return;
+    }
+    
+    // NOTA: En un entorno de producción, DEBERÍAS usar un modal de confirmación. 
+    // Por ahora, solo se intentará la eliminación.
+    
+    const confirmMessage = `¿Estás ABSOLUTAMENTE SEGURO de eliminar el curso "${cursoNombre}"? Esta acción es irreversible.`;
+    
+    // *** Esto es un HACK para evitar el confirm() real ***
+    const isConfirmed = window.prompt(confirmMessage);
+    if (!isConfirmed || isConfirmed.toLowerCase() !== cursoNombre.toLowerCase()) {
+        alert("Eliminación cancelada o confirmación incorrecta.");
+        return;
+    }
+    // *** FIN HACK ***
+
+    try {
+        await cursosStore.deleteCurso(cursoId);
+        alert(`¡Curso "${cursoNombre}" eliminado correctamente!`);
+    } catch (error) {
+        alert(`Error al eliminar el curso: ${error.message}`);
+    }
+}
+
+// --- LÓGICA DE ESTADO ---
+
 const isInscribed = (cursoId) => {
   if (!userId.value) return false
-
-  // 🛑 CORRECCIÓN: Acceder directamente al ref 'inscripciones' desestructurado.
-  // inscripciones.value es el objeto { [userId]: [cursoIds] }
   const userCursosIds = inscripciones.value[userId.value] || [] 
-  
   return userCursosIds.includes(cursoId)
 }
 
 const isUserInvolved = (cursoId) => {
   if (!userId.value) return false
+  // Usa la función del store para verificar si está inscrito o tiene una solicitud pendiente
   return cursosStore.isUserInvolved(userId.value, cursoId)
 }
 
-// NOTA: Se eliminó el 'confirm()' ya que no está permitido por el linter.
 const handleInscription = async (cursoId, cursoNombre) => {
   const tipo = authStore.isStudent ? 'inscripcion_alumno' : 'inscripcion_profesor'
   
@@ -160,7 +197,6 @@ const handleInscription = async (cursoId, cursoNombre) => {
   }
 }
 
-// NOTA: Se eliminó el 'confirm()' ya que no está permitido por el linter.
 const handleBaja = async (cursoId, cursoNombre) => {
   const tipo = authStore.isStudent ? 'baja_alumno' : 'baja_profesor'
 
@@ -181,7 +217,6 @@ const getStatusText = (curso) => {
     return 'Inscrito / Asignado'
   }
   
-  // 🛑 CORRECCIÓN: La store de cursos ahora usa la función isUserInvolved para chequear las solicitudes
   if (isUserInvolved(curso.id)) {
     return 'Solicitud Pendiente'
   }

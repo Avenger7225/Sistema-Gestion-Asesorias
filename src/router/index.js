@@ -66,21 +66,19 @@ const routes = [
   { path: '/:pathMatch(.*)*', name: 'not-found', component: NotFound }
 ]
 
-// ✅ AQUÍ ES DONDE DEFINIMOS EL ROUTER
 const router = createRouter({
   history: createWebHistory(),
   routes
 })
 
-// ✅ GUARD GLOBAL (ESTA ES LA LÓGICA QUE QUERÍAS MANTENER)
-// Esta lógica ahora funcionará porque en main.js se asegura que Pinia esté listo antes de montar el router.
+// guard global
 router.beforeEach(async (to, from, next) => {
   const auth = useAuthStore()
 
-  // Si el store aún no se inicializa, espéralo
+  // Si el store aún no se inicializa, lo espera
   if (!auth.isAuthReady) {
     console.log("[Router Guard] Esperando a que auth se inicialice...")
-    await auth.initAuth()   // <-- Esta línea ahora existe y se puede llamar
+    await auth.initAuth()
   }
 
   if (to.meta.requiresAuth && !auth.isLoggedIn) {
@@ -95,6 +93,5 @@ router.beforeEach(async (to, from, next) => {
 
   next()
 })
-
 
 export default router

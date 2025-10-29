@@ -9,9 +9,7 @@ const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia)
 
-// ✅ inicializar auth ANTES de cargar router
 const auth = useAuthStore()
-
 console.log("[Main] Cargando sesión antes del router...")
 
 auth.initAuth().then(() => {

@@ -1,9 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { supabase } from '@/supabase' // Importación de Supabase
-import { useAuthStore } from './auth' // Importación CORRECTA del store de Auth
+import { supabase } from '@/supabase'
+import { useAuthStore } from './auth'
 
-const PROFESOR_ROLE_ID = "id_profesor_uuid" // Esto parece ser una constante que no se usa actualmente.
+const PROFESOR_ROLE_ID = "id_profesor_uuid"
 
 export const useCursosStore = defineStore('cursos', () => {
     // ESTADO DEL CURSO STORE
@@ -15,7 +15,6 @@ export const useCursosStore = defineStore('cursos', () => {
     const inscripciones = ref({}) 
     
     // --- LÓGICA DE CURSOS ---
-    
     const isUserInvolved = (userid, cursoid) => {
         const inscrito = (inscripciones.value[userid] || []).includes(Number(cursoid));
         if (inscrito) {
@@ -64,9 +63,6 @@ export const useCursosStore = defineStore('cursos', () => {
         try {
             const { data: inscripcionesData, error: fetchError } = await supabase
                 .from('inscripciones')
-                // Nota: Supabase devuelve las columnas como están en la DB (snake_case si no cambiaste el nombre en la tabla).
-                // Asegúrate de que 'userid' y 'cursoid' coincidan con los nombres reales de tus columnas.
-                // Si son user_id y curso_id, cambia el select a: .select(`user_id, curso_id`)
                 .select(`
                     "userid", 
                     "cursoid"
@@ -99,7 +95,6 @@ export const useCursosStore = defineStore('cursos', () => {
         loading.value = true
         error.value = null
         try {
-            // Se asume que fetchInscripciones() ya trae los datos actualizados
             await fetchInscripciones() 
             const misCursosIds = (inscripciones.value[userid] || []).map(String).map(Number).filter(id => id > 0)
 
@@ -161,7 +156,7 @@ export const useCursosStore = defineStore('cursos', () => {
         const { error: insertError } = await supabase
             .from('solicitudes')
             .insert([
-                { user_id: userid, curso_id: cursoid, tipo: tipo }
+                { user_id: userid, curso_id: cursoid, solicitud_tipo: tipo }
             ])
             
         if (insertError) throw insertError
@@ -176,7 +171,6 @@ export const useCursosStore = defineStore('cursos', () => {
         
         try {
             const authStore = useAuthStore()
-            // Uso CORRECTO del isAdmin del authStore
             if (!authStore.isAdmin) throw new Error("Acceso denegado. Solo administradores pueden aprobar solicitudes.")
             
             const { error: rpcError } = await supabase.rpc('handle_solicitud_approval', {
@@ -189,9 +183,8 @@ export const useCursosStore = defineStore('cursos', () => {
             if (rpcError) {
                 console.error("Error al aprobar la solicitud (RPC):", rpcError)
                 throw rpcError
-            }
-            
-            solicitudes.value = solicitudes.value.filter(s => s.id !== solicitud_tipo.id)
+            } 
+            solicitudes.value = solicitudes.value.filter(s => s.id !== solicitud.id)
             
             // Recargar datos de inscripción del usuario
             await fetchInscripciones()
@@ -252,11 +245,7 @@ export const useCursosStore = defineStore('cursos', () => {
 
         // Añadir el nuevo curso al estado_solicitud local
         if (data && data.length > 0) {
-            // Nota: Aquí se asume que authStore.profesores existe. Si no existe,
-            // esta parte fallará. Si ese es el caso, debes cargar la lista de
-            // profesores en el authStore o en una acción separada.
             const profesores = authStore.profesores || [] 
-
             const profesor = profesores.find(p => p.id === data[0].id_profesor)
             const nuevoCurso = {
                 ...data[0],
@@ -303,6 +292,28 @@ export const useCursosStore = defineStore('cursos', () => {
         return data[0]
     }
     
+    // Nueva acción para eliminar un curso (solo Admin)
+    const deleteCurso = async (cursoId) => {
+        const authStore = useAuthStore()
+        if (!authStore.isAdmin) throw new Error("Error de Seguridad: No tienes permisos para eliminar cursos.")
+        
+        // La tabla a usar es 'asesorias'
+        const { error: deleteError } = await supabase
+            .from('asesorias')
+            .delete()
+            .eq('id', cursoId)
+            
+        if (deleteError) {
+             console.error("Error de Supabase al eliminar el curso:", deleteError);
+             throw deleteError
+        }
+        
+        cursos.value = cursos.value.filter(c => c.id !== cursoId)
+        misCursos.value = misCursos.value.filter(c => c.id !== cursoId)
+
+        return true
+    }
+    
     // --- RETURN DEL CURSO STORE ---
     return {
         cursos,
@@ -322,5 +333,6 @@ export const useCursosStore = defineStore('cursos', () => {
         rejectSolicitud,
         addCurso,
         updateCurso,
+        deleteCurso,
     }
 })
