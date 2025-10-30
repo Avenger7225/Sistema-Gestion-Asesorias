@@ -128,6 +128,31 @@ export const useCursosStore = defineStore('cursos', () => {
         }
     }
 
+    const fetchAlumnosInscritos = async (cursoid) => {
+        try {
+            const { data, error: fetchError } = await supabase
+                .from('inscripciones')
+                .select(`
+                    usuario:userid(id, nombre, correo),
+                    cursoid
+                `)
+                .eq('cursoid', cursoid)
+
+            if (fetchError) throw fetchError
+
+            // Retorna un array limpio de objetos de alumno
+            return data.map(i => ({
+                id: i.usuario.id,
+                nombre: i.usuario.nombre,
+                email: i.usuario.correo
+            }));
+
+        } catch (err) {
+            console.error('❌ Error fetchAlumnosInscritos:', err)
+            return []
+        }
+    }
+
 
     // -------------------------------------------------------------
     // ✅ Mis cursos
@@ -401,6 +426,7 @@ export const useCursosStore = defineStore('cursos', () => {
         updateCurso,
         deleteCurso,
         isUserAssignedOrInscribed,
-        isSolicitudPending
+        isSolicitudPending,
+        fetchAlumnosInscritos
     }
 })

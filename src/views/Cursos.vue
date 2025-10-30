@@ -83,27 +83,73 @@
           </template>
 
           <!-- Botones de Administrador (Editar y Eliminar) -->
-          <template v-else-if="authStore.isAdmin && curso.id">
-            <!-- Botón de Eliminar (NUEVO) -->
-            <button
-              @click="handleDelete(curso.id, curso.nombre)" 
-              class="px-5 py-2 bg-red-700 text-white font-medium rounded-lg shadow-md hover:bg-red-800 transition duration-150 text-center"
-            >
-              Eliminar Curso
-            </button>
-            
-            <!-- Botón de Edición -->
-            <button
-              @click="handleEdit(curso.id)" 
-              class="px-5 py-2 bg-blue-500 text-white font-medium rounded-lg shadow-md hover:bg-blue-600 transition duration-150 text-center"
-            >
-              Editar Curso
-            </button>
+          <template v-if="authStore.isAdmin || authStore.isProfessor"> 
+              <button
+                @click="handleVerAlumnos(curso)" 
+                class="px-5 py-2 bg-indigo-600 text-white font-medium rounded-lg shadow-md hover:bg-indigo-700 transition duration-150 text-center"
+              >
+                Ver Alumnos
+              </button>
+          </template>
+
+          <template v-if="authStore.isAdmin && curso.id">
+              <button
+                @click="handleDelete(curso.id, curso.nombre)" 
+                class="px-5 py-2 bg-red-700 text-white font-medium rounded-lg shadow-md hover:bg-red-800 transition duration-150 text-center"
+              >
+                Eliminar Curso
+              </button>
+              
+              <button
+                @click="handleEdit(curso.id)" 
+                class="px-5 py-2 bg-blue-500 text-white font-medium rounded-lg shadow-md hover:bg-blue-600 transition duration-150 text-center"
+              >
+                Editar Curso
+              </button>
           </template>
 
         </div>
       </div>
     </div>
+      <div 
+        v-if="isModalOpen" 
+        class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center"
+      >
+          <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg mx-4 transform transition-all">
+          
+          <h3 class="text-2xl font-bold text-gray-800 mb-4 border-b pb-2">
+            Alumnos Inscritos en: {{ selectedCurso?.nombre }}
+          </h3>
+
+          <div v-if="isFetchingAlumnos" class="p-4 bg-blue-50 text-blue-700 rounded-lg">Cargando lista de alumnos...</div>
+
+          <div v-else-if="alumnosInscritos.length === 0" class="p-4 bg-yellow-50 text-yellow-700 rounded-lg">
+            <p>No hay alumnos inscritos en este curso todavía.</p>
+          </div>
+
+          <div v-else class="max-h-80 overflow-y-auto space-y-3">
+              <div 
+                  v-for="alumno in alumnosInscritos" 
+                  :key="alumno.id"
+                  class="p-3 border rounded-lg bg-gray-50 flex justify-between items-center"
+              >
+                  <div>
+                      <p class="font-semibold text-gray-800">{{ alumno.nombre }}</p>
+                      <p class="text-sm text-gray-500">{{ alumno.email }}</p>
+                  </div>
+                  </div>
+          </div>
+          
+          <div class="mt-6 flex justify-end">
+            <button
+              @click="closeModal"
+              class="px-6 py-2 bg-gray-200 text-gray-800 font-medium rounded-lg hover:bg-gray-300 transition duration-150"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
   </div>
 </template>
 
@@ -119,8 +165,13 @@ import { onMounted } from 'vue'
 const authStore = useAuthStore()
 const cursosStore = useCursosStore()
 const router = useRouter()
-
 const userId = computed(() => authStore.user?.id)
+
+// --- ESTADOS DEL MODAL ---
+const isModalOpen = ref(false);
+const selectedCurso = ref(null);
+const alumnosInscritos = ref([]);
+const isFetchingAlumnos = ref(false);
 
 // Desestructurar del store de cursos
 const { cursos: cursosDelStore, isLoading, inscripciones } = storeToRefs(cursosStore) 
@@ -174,6 +225,38 @@ const handleDelete = async (cursoId, cursoNombre) => {
         alert(`Error al eliminar el curso: ${error.message}`);
     }
 }
+
+// modal
+// --- HANDLERS DEL MODAL ---
+
+// 1. Abre el modal y comienza a cargar los datos
+const handleVerAlumnos = async (curso) => {
+    // Solo permitir a Admin y Profesor ver esta información
+    if (!authStore.isAdmin && !authStore.isProfessor) return; 
+
+    selectedCurso.value = curso;
+    alumnosInscritos.value = [];
+    isModalOpen.value = true;
+    isFetchingAlumnos.value = true;
+
+    try {
+        // Llama a la nueva función del store
+        const alumnos = await cursosStore.fetchAlumnosInscritos(curso.id);
+        alumnosInscritos.value = alumnos;
+    } catch (error) {
+        console.error("Error al cargar alumnos:", error);
+        alert("Hubo un error al cargar la lista de alumnos.");
+    } finally {
+        isFetchingAlumnos.value = false;
+    }
+};
+
+// 2. Cierra el modal y limpia los estados
+const closeModal = () => {
+    isModalOpen.value = false;
+    selectedCurso.value = null;
+    alumnosInscritos.value = [];
+};
 
 // --- LÓGICA DE ESTADO ---
 
