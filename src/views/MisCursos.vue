@@ -31,7 +31,6 @@
         </div>
 
         <div v-else class="space-y-4">
-            <!-- Iteramos sobre el estado 'misCursos' -->
             <div 
                 v-for="curso in misCursos" 
                 :key="curso.id"
@@ -42,8 +41,7 @@
                 
                 <div class="mt-3 text-sm grid grid-cols-2 gap-2">
                     <p><strong>Horario:</strong> {{ curso.horario }}</p>
-                    <!-- Usamos el campo corregido 'profesorNombre' -->
-                    <p><strong>Profesor:</strong> {{ curso.nombreProfesor }}</p>
+                    <p><strong>Profesor:</strong> {{ curso.profesorNombre }}</p> 
                 </div>
             </div>
         </div>
@@ -97,10 +95,10 @@ const currentUserId = computed(() => authStore.user?.id);
 
 // Observar el cambio de userId y la carga inicial de todos los cursos
 // para disparar la carga de 'Mis Cursos'.
+// Componente .vue
 watch(currentUserId, (newId) => {
-    if (newId) {
-        // No es necesario pasar newId, ya que fetchMisCursos lo obtiene del authStore
-        cursosStore.fetchMisCursos(); 
+    if (newId) { 
+        cursosStore.fetchMisCursos(); // <--- Aquí no se pasa 'newId'
     }
 }, { immediate: true });
 

@@ -5,8 +5,8 @@
       <router-link to="/cursos" class="nav-link">Asesorías Disponibles</router-link>
       <router-link to="/perfil" class="nav-link">Perfil</router-link>
 
-      <span v-if="authStore.isStudent" class="tag-alumno">Alumno</span>
-      <span v-else-if="authStore.isProfessor" class="tag-profesor">Profesor</span>
+      <span v-if="authStore.isStudent" class="tag-alumno">Perfil de Alumno</span>
+      <span v-else-if="authStore.isProfessor" class="tag-profesor">Perfil de Profesor</span>
 
       <button @click="logout" class="logout-button">Salir</button>
     </nav>
@@ -68,13 +68,13 @@ const logout = async () => {
   background:green;
   padding: 0.5%;
   border-radius: 10%;
-  margin-left: 60%;
+  margin-left: 65%;
 }
 
 .tag-profesor{
   background:green;
   padding: 0.5%;
   border-radius: 10%;
-  margin-left: 60%;
+  margin-left: 65%;
 }
 </style>

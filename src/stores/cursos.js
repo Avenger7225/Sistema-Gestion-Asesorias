@@ -15,20 +15,54 @@ export const useCursosStore = defineStore('cursos', () => {
 
 
     // ======== HELPERS ========
-    const isUserInvolved = (userid, cursoid) => {
-        const inscrito = (inscripciones.value[userid] || []).includes(cursoid); // <-- QUITAMOS Number()
+    const isUserAssignedOrInscribed = (userid, cursoid) => {
+        // 1. Verificar si está inscrito como ALUMNO
+        const inscrito = (inscripciones.value[userid] || []).includes(cursoid);
         if (inscrito) return true;
 
-        // 2. Verificar si tiene solicitud pendiente
-        const pendiente = solicitudes.value.some(solicitud =>
-            // Ambas comparaciones ahora son entre Strings (UUIDs), lo cual es correcto.
-            solicitud.user_id === userid &&
-            solicitud.curso_id === cursoid && // <-- QUITAMOS Number()
-            solicitud.estado_solicitud === 'pendiente'
+        // 2. Verificar si está ASIGNADO como PROFESOR
+        const asignadoComoProfesor = cursos.value.some(curso => 
+            curso.id === cursoid && 
+            curso.id_profesor === userid // ¡Verificación directa en la tabla asesorias!
         );
-        return pendiente;
+        if (asignadoComoProfesor) return true;
+        
+        return false;
     }
 
+    // 2. Función para verificar el estado INTERMEDIO (Pendiente)
+    const isSolicitudPending = (userid, cursoid) => {
+        // Simplemente verifica la tabla de solicitudes
+        return solicitudes.value.some(solicitud =>
+            solicitud.user_id === userid &&
+            solicitud.curso_id === cursoid &&
+            solicitud.estado_solicitud === 'pendiente'
+        );
+    }
+
+    const isUserInvolved = (userid, cursoid) => {
+        // 1. Verificar si está inscrito como ALUMNO
+        const inscrito = (inscripciones.value[userid] || []).includes(cursoid);
+        if (inscrito) return true;
+
+        // 2. Verificar si tiene solicitud PENDIENTE (Alumno o Profesor)
+        const pendiente = solicitudes.value.some(solicitud =>
+            solicitud.user_id === userid &&
+            solicitud.curso_id === cursoid &&
+            solicitud.estado_solicitud === 'pendiente'
+        );
+        if (pendiente) return true;
+
+        // 3. 🔑 NUEVO: Verificar si está ASIGNADO como PROFESOR
+        // Se busca en la lista completa de cursos cargados (asesorias)
+        const asignadoComoProfesor = cursos.value.some(curso => 
+            curso.id === cursoid && 
+            curso.id_profesor === userid // ¡El ID del profesor en la tabla asesorias coincide con el userid!
+        );
+        if (asignadoComoProfesor) return true;
+
+        return false; // No involucrado
+    }
 
     // -------------------------------------------------------------
     // ✅ Obtener TODOS los cursos con profesor asignado (asesorías)
@@ -98,45 +132,69 @@ export const useCursosStore = defineStore('cursos', () => {
     // -------------------------------------------------------------
     // ✅ Mis cursos
     // -------------------------------------------------------------
-    const fetchMisCursos = async (userid) => {
+    const fetchMisCursos = async () => {
+    const authStore = useAuthStore();
+    const userid = authStore.user?.id; // Obtén el ID de forma segura
+
+        // 🔑 GUARDIA: Si no hay un ID de usuario válido, sal de la función.
+        if (!userid) {
+            console.warn('❌ fetchMisCursos abortado: El ID de usuario no está disponible.');
+            misCursos.value = [];
+            return;
+        }
+        
         loading.value = true
         error.value = null
 
         try {
             await fetchInscripciones()
-
+            
+            // 1. Obtener IDs de cursos donde el usuario es Alumno
+            // ... (El resto del código se queda igual, usando 'userid')
             const misCursosIds = (inscripciones.value[userid] || [])
-                .map(Number)
-                .filter(id => id > 0)
+                .filter(id => id); 
+            
+            // 2. Obtener cursos donde el usuario es Profesor
+            const { data: profesorCursos, error: profesorError } = await supabase
+                .from('asesorias')
+                .select('id') 
+                .eq('id_profesor', userid); // <--- Aquí ya está limpio
+            if (profesorError) throw profesorError;
+            
+            const profesorCursosIds = profesorCursos.map(c => c.id);
 
-            if (misCursosIds.length === 0) {
-                misCursos.value = []
-                return
+            // 3. Combinar IDs (usando un Set para eliminar duplicados)
+            const todosLosIds = [...new Set([...misCursosIds, ...profesorCursosIds])];
+
+            if (todosLosIds.length === 0) {
+                misCursos.value = [];
+                return;
             }
 
+            // 4. Obtener la información completa de todos los cursos combinados
             const { data, error: fetchError } = await supabase
                 .from('asesorias')
                 .select(`
                     *,
                     profesor:id_profesor(nombre)
                 `)
-                .in('id', misCursosIds)
+                // Usar 'in' con todos los IDs únicos (UUIDs)
+                .in('id', todosLosIds); 
 
-            if (fetchError) throw fetchError
+            if (fetchError) throw fetchError;
 
             misCursos.value = data.map(asesoria => ({
                 ...asesoria,
                 profesorNombre: asesoria.profesor?.nombre || 'Sin asignar'
-            }))
+            }));
 
         } catch (err) {
-            console.error('❌ Error fetchMisCursos:', err)
-            error.value = err
+            console.error('❌ Error fetchMisCursos:', err);
+            error.value = err;
         } finally {
-            loading.value = false
+            loading.value = false;
         }
     }
-
 
     // -------------------------------------------------------------
     // ✅ Solicitudes pendientes
@@ -342,5 +400,7 @@ export const useCursosStore = defineStore('cursos', () => {
         addCurso,
         updateCurso,
         deleteCurso,
+        isUserAssignedOrInscribed,
+        isSolicitudPending
     }
 })
