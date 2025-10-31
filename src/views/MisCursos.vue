@@ -58,8 +58,7 @@
             </div>
             <div class="bg-orange-50 border-l-4 border-orange-400 p-4 rounded-lg shadow-md">
                 <p class="text-lg font-semibold text-orange-800">Solicitudes Pendientes:</p>
-                <!-- Asume que ya cargamos las solicitudes en la store -->
-                <p class="text-3xl text-orange-600 font-extrabold">{{ cursosStore.solicitudes?.length || 0 }}</p>
+                <p class="text-3xl text-orange-600 font-extrabold">{{ solicitudesPendientesCount }}</p>
             </div>
         </div>
         
@@ -77,7 +76,6 @@
 </template>
 
 <script setup>
-// IMPORTACIÓN CORREGIDA: Agregamos 'watch'
 import { computed, onMounted, watch } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useCursosStore } from '@/stores/cursos';
@@ -86,36 +84,30 @@ import { storeToRefs } from 'pinia';
 const authStore = useAuthStore();
 const cursosStore = useCursosStore();
 
-// CORRECCIÓN: Desestructuramos 'loading' y lo renombramos a 'isLoading'
-// para que coincida con el uso en el <template>.
-const { loading: isLoading, cursos, misCursos } = storeToRefs(cursosStore);
-
-// ID del usuario actual (UUID del authStore)
+const { loading: isLoading, cursos, misCursos, solicitudes } = storeToRefs(cursosStore);
 const currentUserId = computed(() => authStore.user?.id);
 
-// Observar el cambio de userId y la carga inicial de todos los cursos
-// para disparar la carga de 'Mis Cursos'.
-// Componente .vue
+const solicitudesPendientesCount = computed(() => {
+    if (!solicitudes.value) return 0;
+    return solicitudes.value.filter(solicitud => solicitud.estado_solicitud === 'pendiente').length;
+});
+
 watch(currentUserId, (newId) => {
     if (newId) { 
-        cursosStore.fetchMisCursos(); // <--- Aquí no se pasa 'newId'
+        cursosStore.fetchMisCursos();
     }
 }, { immediate: true });
 
 watch(cursos, (newCursos) => {
-    // Si los cursos generales se cargan o cambian, y el usuario existe, recargamos mis cursos.
     if (newCursos.length > 0 && currentUserId.value) {
-        // No es necesario pasar currentUserId.value, ya que fetchMisCursos lo obtiene del authStore
         cursosStore.fetchMisCursos(); 
     }
 });
 
-
-// CORRECCIÓN 1: Eliminamos el computed asíncrono que causaba problemas.
-// CORRECCIÓN 2: Corregir la sintaxis de onMounted anidado que causaba 'is not a function'.
 onMounted(async () => {
-    // Esta llamada inicia los listeners y la carga inicial de TODOS los cursos.
-    // Una vez que 'cursos' se cargue, el 'watch(cursos)' de arriba llamará a 'fetchMisCursos'.
     await cursosStore.fetchCursos();
+    if (authStore.isAdmin) {
+        await cursosStore.fetchSolicitudes();
+    }
 });
 </script>

@@ -45,7 +45,7 @@
             <input
               type="number"
               id="cupo"
-              v-model.number="curso.cupo"
+              v-model.number="curso.cupo_maximo"
               required
               min="1"
               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
@@ -53,20 +53,25 @@
           </div>
 
           <div>
-            <label for="profesor" class="block text-sm font-medium text-gray-700">Profesor Asignado (UUID)</label>
-            <select
-              id="profesor"
-              v-model="curso.profesorId" 
-              class="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              <option :value="null">-- Sin asignar --</option>
-              
-              <!-- Usar UUIDs como strings para la DB -->
-              <option value="9f61b4aa-2a85-451e-bdbf-ea848f760d15">Prof. (Martin Sanchez)</option> 
-              <option value="95e1d818-9efd-4c42-833c-e3886292631f">Otro Prof.</option>
-              
-            </select>
+              <label for="profesor" class="block text-sm font-medium text-gray-700">Profesor Asignado</label>
+              <select
+                  id="profesor"
+                  v-model="curso.profesorId" 
+                  class="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              >
+                  <option :value="null">-- Sin asignar --</option>
+                  
+                  <option 
+                      v-for="profesor in profesoresDisponibles" 
+                      :key="profesor.id"
+                      :value="profesor.id"
+                  >
+                      Prof. ({{ profesor.nombre }})
+                  </option>
+                  
+              </select>
           </div>
+
         </div>
       </div>
 
@@ -92,27 +97,37 @@
 </template>
 
 <script setup>
-import { ref, watchEffect } from 'vue';
+import { ref, watchEffect, onMounted } from 'vue';
 import { useCursosStore } from '@/stores/cursos';
+import { useAuthStore } from '@/stores/auth';
 import { useRoute, useRouter } from 'vue-router';
-import { storeToRefs } from 'pinia'; 
+import { storeToRefs } from 'pinia';
 
 const cursosStore = useCursosStore();
+const authStore = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 
 const { cursos } = storeToRefs(cursosStore); 
 
 const curso = ref({}); 
-
+const profesoresDisponibles = ref([]);
 const message = ref(null);
 const messageClass = ref('');
 
-// Función simulada para obtener el nombre del profesor por ID
+const loadData = async () => {
+  profesoresDisponibles.value = await cursosStore.fetchProfesores();
+  await cursosStore.fetchCursos();
+};
+
+onMounted(() => {
+    loadData();
+});
+
 const getProfesorById = (id) => {
-    if (id === '9f61b4aa-2a85-451e-bdbf-ea848f760d15') return { nombre: 'Prof. Martin Sanchez' };
-    if (id === '95e1d818-9efd-4c42-833c-e3886292631f') return { nombre: 'Prof. Ana López' };
-    return { nombre: 'Sin asignar' };
+    if (!id) return { nombre: 'Sin asignar' };
+    const profesor = profesoresDisponibles.value.find(p => p.id === id);
+    return { nombre: profesor ? `Prof. ${profesor.nombre}` : 'Sin asignar' };
 };
 
 watchEffect(() => {
@@ -124,34 +139,39 @@ watchEffect(() => {
       return; 
   }
 
-  // Los IDs de los cursos son números enteros (no UUIDs), por eso usamos parseInt.
-  const cursoIdNum = parseInt(cursoIdStr, 10); 
-  
-  const foundCurso = currentCursos.find(c => c.id === cursoIdNum); 
+  // 🔑 CORRECCIÓN CLAVE: Buscar directamente por el string del UUID
+  // Se asume que c.id (en la store) es un string UUID y se compara con cursoIdStr (de la ruta).
+  const foundCurso = currentCursos.find(c => c.id === cursoIdStr); 
 
   if (foundCurso) {
-    // Asegurarse de que el objeto local sea una copia editable, manteniendo la estructura de la store
-    curso.value = { ...foundCurso }; 
+    // Mapeo de campos de la DB al estado local
+    curso.value = { 
+        ...foundCurso,
+        profesorId: foundCurso.id_profesor || null, 
+        cupo: foundCurso.cupo_maximo 
+    }; 
   } else {
+    // Esto se mostrará si la store aún no ha cargado el curso
     curso.value = { id: null, nombre: 'Error: ID no encontrado' }; 
   }
 });
 
-// Convertir a función asíncrona
 const submitForm = async () => {
-  // 1. Determinar el nombre del profesor basado en el ID seleccionado
   const profesorData = getProfesorById(curso.value.profesorId);
-  curso.value.profesor = profesorData.nombre;
+  curso.value.profesorId = curso.value.profesorId;
+  curso.value.profesorNombre = profesorData.nombre;
 
   try {
-    // 2. Llamar a la acción asíncrona de actualización y esperar su finalización
-    await cursosStore.updateCurso(curso.value.id, curso.value);
+    await cursosStore.updateCurso(curso.value.id, {
+        ...curso.value,
+        cupo_maximo: curso.value.cupo,
+        profesorId: curso.value.profesorId,
+        profesorNombre: profesorData.nombre
+    });
 
-    // 3. Mostrar mensaje de éxito
     message.value = `¡Curso "${curso.value.nombre}" actualizado con éxito!`;
     messageClass.value = 'bg-green-100 text-green-800';
 
-    // 4. Redirigir después de 1.5 segundos
     setTimeout(() => {
         router.push({ name: 'cursos' }); 
     }, 1500);

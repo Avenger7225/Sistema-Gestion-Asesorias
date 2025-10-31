@@ -11,6 +11,7 @@ import NotFound from '@/views/NotFound.vue'
 import AgregarAsesoria from '@/views/AgregarAsesoria.vue'
 import EditarAsesoria from '@/views/EditarAsesoria.vue'
 import Solicitudes from '@/views/Solicitudes.vue'
+import AdminRegister from '@/views/AdminRegister.vue'
 
 const routes = [
   {
@@ -59,7 +60,13 @@ const routes = [
         path: 'solicitudes',
         name: 'solicitudes',
         component: Solicitudes
-      }
+      },
+      {
+          path: '/admin/register',
+          name: 'admin-register',
+          component: AdminRegister, 
+          meta: { requiresAuth: true, requiresAdmin: true } 
+      },
     ]
   },
 

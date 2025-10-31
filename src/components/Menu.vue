@@ -8,7 +8,7 @@
       <span v-if="authStore.isStudent" class="tag-alumno">Perfil de Alumno</span>
       <span v-else-if="authStore.isProfessor" class="tag-profesor">Perfil de Profesor</span>
 
-      <button @click="logout" class="logout-button">Salir</button>
+      <button @click="handleLogout" class="logout-button">Salir</button>
     </nav>
   </header>
 </template>
@@ -21,10 +21,13 @@ import { supabase } from '@/supabase';
 const router = useRouter()
 const authStore = useAuthStore()
 
-const logout = async () => {
-  await supabase.auth.signOut()
-  this.user = null
-  this.isAuthReady = false
+const handleLogout = async () => {
+    try {
+        await authStore.logout()
+        router.push({ name: 'login' })
+    } catch (error) {
+        console.error("Error al cerrar sesión:", error)
+    }
 }
 </script>
 
@@ -75,6 +78,6 @@ const logout = async () => {
   background:green;
   padding: 0.5%;
   border-radius: 10%;
-  margin-left: 65%;
+  margin-left: 64%;
 }
 </style>

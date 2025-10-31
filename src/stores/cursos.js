@@ -5,7 +5,7 @@ import { useAuthStore } from './auth'
 
 export const useCursosStore = defineStore('cursos', () => {
 
-    // ======== ESTADO ========
+    // ESTADOS REACTIVOS
     const cursos = ref([])
     const misCursos = ref([])
     const solicitudes = ref([])
@@ -13,26 +13,23 @@ export const useCursosStore = defineStore('cursos', () => {
     const error = ref(null)
     const inscripciones = ref({}) 
 
-
-    // ======== HELPERS ========
     const isUserAssignedOrInscribed = (userid, cursoid) => {
-        // 1. Verificar si está inscrito como ALUMNO
+        // Verificar si esta inscrito como ALUMNO
         const inscrito = (inscripciones.value[userid] || []).includes(cursoid);
         if (inscrito) return true;
 
-        // 2. Verificar si está ASIGNADO como PROFESOR
+        // Verificar si esta ASIGNADO como PROFESOR
         const asignadoComoProfesor = cursos.value.some(curso => 
             curso.id === cursoid && 
-            curso.id_profesor === userid // ¡Verificación directa en la tabla asesorias!
+            curso.id_profesor === userid
         );
         if (asignadoComoProfesor) return true;
         
         return false;
     }
 
-    // 2. Función para verificar el estado INTERMEDIO (Pendiente)
+    // Funcion para verificar el estado pendiente
     const isSolicitudPending = (userid, cursoid) => {
-        // Simplemente verifica la tabla de solicitudes
         return solicitudes.value.some(solicitud =>
             solicitud.user_id === userid &&
             solicitud.curso_id === cursoid &&
@@ -41,32 +38,26 @@ export const useCursosStore = defineStore('cursos', () => {
     }
 
     const isUserInvolved = (userid, cursoid) => {
-        // 1. Verificar si está inscrito como ALUMNO
+        // Verificar si está inscrito como ALUMNO
         const inscrito = (inscripciones.value[userid] || []).includes(cursoid);
         if (inscrito) return true;
 
-        // 2. Verificar si tiene solicitud PENDIENTE (Alumno o Profesor)
+        // Verificar si tiene solicitud PENDIENTE
         const pendiente = solicitudes.value.some(solicitud =>
             solicitud.user_id === userid &&
             solicitud.curso_id === cursoid &&
             solicitud.estado_solicitud === 'pendiente'
         );
         if (pendiente) return true;
-
-        // 3. 🔑 NUEVO: Verificar si está ASIGNADO como PROFESOR
-        // Se busca en la lista completa de cursos cargados (asesorias)
         const asignadoComoProfesor = cursos.value.some(curso => 
             curso.id === cursoid && 
-            curso.id_profesor === userid // ¡El ID del profesor en la tabla asesorias coincide con el userid!
+            curso.id_profesor === userid
         );
         if (asignadoComoProfesor) return true;
 
-        return false; // No involucrado
+        return false;
     }
 
-    // -------------------------------------------------------------
-    // ✅ Obtener TODOS los cursos con profesor asignado (asesorías)
-    // -------------------------------------------------------------
     const fetchCursos = async () => {
         loading.value = true
         error.value = null
@@ -98,10 +89,6 @@ export const useCursosStore = defineStore('cursos', () => {
         }
     }
 
-
-    // -------------------------------------------------------------
-    // ✅ Obtener todas las inscripciones de usuarios a cursos
-    // -------------------------------------------------------------
     const fetchInscripciones = async () => {
         try {
             const { data, error: fetchError } = await supabase
@@ -115,13 +102,11 @@ export const useCursosStore = defineStore('cursos', () => {
     data.forEach(inscripcion => {
         const userid = inscripcion.userid;
         const cursoid = inscripcion.cursoid;
-
         if (!newInscripciones[userid]) newInscripciones[userid] = [];
-        // ❌ ¡Quitamos Number() si cursoid es un UUID!
         if (cursoid) newInscripciones[userid].push(cursoid); 
     })
 
-            inscripciones.value = newInscripciones
+        inscripciones.value = newInscripciones
 
         } catch (err) {
             console.error('❌ Error fetchInscripciones:', err)
@@ -139,8 +124,6 @@ export const useCursosStore = defineStore('cursos', () => {
                 .eq('cursoid', cursoid)
 
             if (fetchError) throw fetchError
-
-            // Retorna un array limpio de objetos de alumno
             return data.map(i => ({
                 id: i.usuario.id,
                 nombre: i.usuario.nombre,
@@ -152,16 +135,28 @@ export const useCursosStore = defineStore('cursos', () => {
             return []
         }
     }
+    
+    const fetchProfesores = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('usuarios')
+                .select('id, nombre')
+                .eq('rol', 'profesor')
+                .order('nombre', { ascending: true }); 
 
+            if (error) throw error;
+            
+            return data;
+        } catch (err) {
+            console.error('❌ Error al cargar la lista de profesores:', err.message);
+            return [];
+        }
+    }
 
-    // -------------------------------------------------------------
-    // ✅ Mis cursos
-    // -------------------------------------------------------------
     const fetchMisCursos = async () => {
     const authStore = useAuthStore();
-    const userid = authStore.user?.id; // Obtén el ID de forma segura
+    const userid = authStore.user?.id;
 
-        // 🔑 GUARDIA: Si no hay un ID de usuario válido, sal de la función.
         if (!userid) {
             console.warn('❌ fetchMisCursos abortado: El ID de usuario no está disponible.');
             misCursos.value = [];
@@ -173,22 +168,16 @@ export const useCursosStore = defineStore('cursos', () => {
 
         try {
             await fetchInscripciones()
-            
-            // 1. Obtener IDs de cursos donde el usuario es Alumno
-            // ... (El resto del código se queda igual, usando 'userid')
             const misCursosIds = (inscripciones.value[userid] || [])
                 .filter(id => id); 
-            
-            // 2. Obtener cursos donde el usuario es Profesor
+
             const { data: profesorCursos, error: profesorError } = await supabase
                 .from('asesorias')
                 .select('id') 
-                .eq('id_profesor', userid); // <--- Aquí ya está limpio
+                .eq('id_profesor', userid);
             if (profesorError) throw profesorError;
             
             const profesorCursosIds = profesorCursos.map(c => c.id);
-
-            // 3. Combinar IDs (usando un Set para eliminar duplicados)
             const todosLosIds = [...new Set([...misCursosIds, ...profesorCursosIds])];
 
             if (todosLosIds.length === 0) {
@@ -196,14 +185,12 @@ export const useCursosStore = defineStore('cursos', () => {
                 return;
             }
 
-            // 4. Obtener la información completa de todos los cursos combinados
             const { data, error: fetchError } = await supabase
                 .from('asesorias')
                 .select(`
                     *,
                     profesor:id_profesor(nombre)
                 `)
-                // Usar 'in' con todos los IDs únicos (UUIDs)
                 .in('id', todosLosIds); 
 
             if (fetchError) throw fetchError;
@@ -221,40 +208,29 @@ export const useCursosStore = defineStore('cursos', () => {
         }
     }
 
-    // -------------------------------------------------------------
-    // ✅ Solicitudes pendientes
-    // -------------------------------------------------------------
     const fetchSolicitudes = async () => {
-    try {
-        const { data, error: fetchError } = await supabase
-            .from('solicitudes')
-            .select(`
-                *,
-                curso:curso_id(nombre),
-                usuario:user_id(nombre) // <-- Mantenemos este join para el nombre del Admin
-            `)
+        try {
+            const { data, error: fetchError } = await supabase
+                .from('solicitudes')
+                .select(`
+                    *,
+                    curso:curso_id(nombre),
+                    usuario:user_id(nombre) // <-- Mantenemos este join para el nombre del Admin
+                `)
 
-        if (fetchError) throw fetchError
+            if (fetchError) throw fetchError
 
-        solicitudes.value = data.map(solicitud => ({
-            ...solicitud,
-            // ⚠️ El campo solicitud.user_id ahora es el ID (UUID) de la solicitud en la DB.
-            // Si el join oculta el user_id original, debes pedirlo así: user_id!inner(id, nombre)
-            // Pero asumiremos que al pedir el * (asterisco), el user_id del root se mantiene.
-            
-            cursoNombre: solicitud.curso?.nombre || 'Curso desconocido',
-            usuarioNombre: solicitud.usuario?.nombre || 'Usuario desconocido',
+            solicitudes.value = data.map(solicitud => ({
+                ...solicitud,            
+                cursoNombre: solicitud.curso?.nombre || 'Curso desconocido',
+                usuarioNombre: solicitud.usuario?.nombre || 'Usuario desconocido',
         }))
 
-    } catch (err) {
-        console.error('❌ Error fetchSolicitudes:', err)
-    }
+        } catch (err) {
+            console.error('❌ Error fetchSolicitudes:', err)
+        }
     }
 
-
-    // -------------------------------------------------------------
-    // ✅ Enviar Solicitud (Alumno/Profesor)
-    // -------------------------------------------------------------
     const sendSolicitud = async (userid, cursoid, tipo) => {
         const { error } = await supabase
             .from('solicitudes')
@@ -269,10 +245,6 @@ export const useCursosStore = defineStore('cursos', () => {
         await fetchInscripciones()
     }
 
-
-    // -------------------------------------------------------------
-    // ✅ Aprobar solicitud (Admin)
-    // -------------------------------------------------------------
     const approveSolicitud = async (solicitud) => {
         try {
             const authStore = useAuthStore()
@@ -296,9 +268,6 @@ export const useCursosStore = defineStore('cursos', () => {
         }
     }
 
-    // -------------------------------------------------------------
-    // ✅ Rechazar solicitud (Admin)
-    // -------------------------------------------------------------
     const rejectSolicitud = async (solicitudId) => {
         try {
             const authStore = useAuthStore()
@@ -319,10 +288,6 @@ export const useCursosStore = defineStore('cursos', () => {
         }
     }
 
-
-    // -------------------------------------------------------------
-    // ✅ Admin: Crear Curso
-    // -------------------------------------------------------------
     const addCurso = async (curso) => {
         const authStore = useAuthStore()
         if (!authStore.isAdmin) throw new Error("No tienes permisos.")
@@ -350,10 +315,6 @@ export const useCursosStore = defineStore('cursos', () => {
         return data[0]
     }
 
-
-    // -------------------------------------------------------------
-    // ✅ Admin: Editar curso
-    // -------------------------------------------------------------
     const updateCurso = async (cursoid, curso) => {
         const authStore = useAuthStore()
         if (!authStore.isAdmin) throw new Error("No tienes permisos.")
@@ -383,10 +344,6 @@ export const useCursosStore = defineStore('cursos', () => {
         return data[0]
     }
 
-
-    // -------------------------------------------------------------
-    // ✅ Admin: Eliminar curso
-    // -------------------------------------------------------------
     const deleteCurso = async (cursoId) => {
         const authStore = useAuthStore()
         if (!authStore.isAdmin) throw new Error("No tienes permisos.")
@@ -403,9 +360,6 @@ export const useCursosStore = defineStore('cursos', () => {
         return true
     }
 
-
-
-    // ===== RETURN API =====
     return {
         cursos,
         misCursos,
@@ -427,6 +381,7 @@ export const useCursosStore = defineStore('cursos', () => {
         deleteCurso,
         isUserAssignedOrInscribed,
         isSolicitudPending,
-        fetchAlumnosInscritos
+        fetchAlumnosInscritos,
+        fetchProfesores
     }
 })

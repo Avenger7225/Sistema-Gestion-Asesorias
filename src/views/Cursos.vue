@@ -53,34 +53,34 @@
 
         <div class="mt-6 flex justify-end space-x-3">       
           <!-- Botones de inscripcion y baja (Solo para Alumno/Profesor) -->
-          <template v-if="!authStore.isAdmin">
-              <div class="col-span-1 flex justify-end items-center">
-                  <template v-if="cursosStore.isUserAssignedOrInscribed(authStore.user?.id, curso.id)">
-                      <button 
-                          @click="handleBaja(curso.id, curso.nombre)"
-                          class="px-5 py-2 bg-red-600 text-white font-medium rounded-lg shadow-md hover:bg-red-700 transition duration-150"
-                      >
-                          Solicitar Baja
-                      </button>
-                  </template>
-                  
-                  <span 
-                      v-else-if="cursosStore.isSolicitudPending(authStore.user?.id, curso.id)"
-                      class="inline-block px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800"
-                  >
-                      SOLICITUD PENDIENTE
-                  </span>
-                  
-                  <button 
-                      v-else
-                      @click="handleInscription(curso.id, curso.nombre)"
-                      class="px-5 py-2 bg-green-600 text-white font-medium rounded-lg shadow-md hover:bg-green-700 transition duration-150 disabled:opacity-50"
-                      :disabled="!authStore.isStudent && !authStore.isProfessor"
-                  >
-                      Solicitar {{ authStore.isStudent ? 'Inscripción' : 'Ser Docente' }}
-                  </button>
-              </div>
-          </template>
+        <template v-if="!authStore.isAdmin">
+            <div class="col-span-1 flex justify-end items-center">
+                <template v-if="cursosStore.isUserAssignedOrInscribed(authStore.user?.id, curso.id)">
+                    <button 
+                        @click="handleBaja(curso.id, curso.nombre)"
+                        class="px-5 py-2 bg-red-600 text-white font-medium rounded-lg shadow-md hover:bg-red-700 transition duration-150"
+                    >
+                        Solicitar Baja
+                    </button>
+                </template>
+                
+                <span 
+                    v-else-if="cursosStore.isSolicitudPending(authStore.user?.id, curso.id)"
+                    class="inline-block px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800"
+                >
+                    SOLICITUD PENDIENTE
+                </span>
+                
+                <button 
+                    v-else
+                    @click="handleInscription(curso.id, curso.nombre)"
+                    class="px-5 py-2 bg-green-600 text-white font-medium rounded-lg shadow-md hover:bg-green-700 transition duration-150 disabled:opacity-50"
+                    :disabled="!authStore.isStudent && !authStore.isProfessor || (authStore.isProfessor && curso.profesorNombre && curso.profesorNombre !== 'Sin asignar')"
+                    >
+                    Solicitar {{ authStore.isStudent ? 'Inscripción' : 'Ser Docente' }}
+                </button>
+            </div>
+        </template>
 
           <!-- Botones de Administrador (Editar y Eliminar) -->
           <template v-if="authStore.isAdmin || authStore.isProfessor"> 

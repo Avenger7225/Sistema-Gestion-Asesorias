@@ -3,11 +3,18 @@
     <nav class="nav-menu">
       <router-link to="/dashboard" class="nav-link">Inicio</router-link>
       <router-link to="/cursos" class="nav-link">Asesorías Disponibles</router-link>
+      <router-link 
+        v-if="authStore.isAdmin" 
+        :to="{ name: 'admin-register' }"
+        class="nav-link"
+      >
+        Registrar Usuario
+      </router-link>
       <router-link to="/perfil" class="nav-link">Perfil</router-link>
 
       <span class="tag-admin">Administrador</span>
 
-      <button @click="logout" class="logout-button">Salir</button>
+      <button @click="handleLogout" class="logout-button">Salir</button>
     </nav>
   </header>
 </template>
@@ -20,10 +27,17 @@ import { supabase } from '@/supabase';
 const router = useRouter()
 const authStore = useAuthStore()
 
-const logout = async () => {
-  await supabase.auth.signOut()
-  this.user = null
-  this.isAuthReady = false
+const handleLogout = async () => {
+    try {
+        await authStore.logout() // Llama a la acción que limpia la sesión
+        
+        // --- 🔑 SOLUCIÓN: Redirigir después de limpiar la sesión ---
+        router.push({ name: 'login' }) // Usa el nombre de tu ruta de login
+        // --------------------------------------------------------
+
+    } catch (error) {
+        console.error("Error al cerrar sesión:", error)
+    }
 }
 </script>
 
@@ -67,6 +81,6 @@ const logout = async () => {
   background:brown;
   padding: 0.6%;
   border-radius: 10%;
-  margin-left: 72%;
+  margin-left: 68%;
 }
 </style>
