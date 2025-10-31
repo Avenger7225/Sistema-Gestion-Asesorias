@@ -161,31 +161,25 @@ import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { onMounted } from 'vue'
 
-// --- SETUP ---
 const authStore = useAuthStore()
 const cursosStore = useCursosStore()
 const router = useRouter()
 const userId = computed(() => authStore.user?.id)
 
-// --- ESTADOS DEL MODAL ---
+// ESTADOS DEL MODAL
 const isModalOpen = ref(false);
 const selectedCurso = ref(null);
 const alumnosInscritos = ref([]);
 const isFetchingAlumnos = ref(false);
-
-// Desestructurar del store de cursos
 const { cursos: cursosDelStore, isLoading, inscripciones } = storeToRefs(cursosStore) 
 const cursosDisponibles = cursosDelStore
 
 onMounted(() => {
-    // Cargar cursos y solicitudes al montar
     if (cursosDelStore.value.length === 0) {
         cursosStore.fetchCursos();
         cursosStore.fetchSolicitudes(); 
     }
 });
-
-// --- MANEJADORES DE ACCIONES ---
 
 const handleCreate = () => {
   router.push({ name: 'crear-asesoria' })
@@ -196,27 +190,18 @@ const handleEdit = (cursoId) => {
     router.push({ name: 'editar-asesoria', params: { cursoId: cursoId } });
 };
 
-// NUEVO: Manejador de Eliminación (solo Admin)
 const handleDelete = async (cursoId, cursoNombre) => {
-    // Usamos una ventana modal custom en lugar de alert/confirm. Aquí simularemos con un error si falla.
-    // Para entornos reales, usarías un componente modal (No se usa confirm() por restricción del entorno).
     if (!authStore.isAdmin) {
         alert("Error de Seguridad: No tienes permisos de administrador para eliminar.");
         return;
     }
     
-    // NOTA: En un entorno de producción, DEBERÍAS usar un modal de confirmación. 
-    // Por ahora, solo se intentará la eliminación.
-    
     const confirmMessage = `¿Estás ABSOLUTAMENTE SEGURO de eliminar el curso "${cursoNombre}"? Esta acción es irreversible.`;
-    
-    // *** Esto es un HACK para evitar el confirm() real ***
     const isConfirmed = window.prompt(confirmMessage);
     if (!isConfirmed || isConfirmed.toLowerCase() !== cursoNombre.toLowerCase()) {
         alert("Eliminación cancelada o confirmación incorrecta.");
         return;
     }
-    // *** FIN HACK ***
 
     try {
         await cursosStore.deleteCurso(cursoId);
@@ -226,21 +211,14 @@ const handleDelete = async (cursoId, cursoNombre) => {
     }
 }
 
-// modal
-// --- HANDLERS DEL MODAL ---
-
-// 1. Abre el modal y comienza a cargar los datos
 const handleVerAlumnos = async (curso) => {
-    // Solo permitir a Admin y Profesor ver esta información
     if (!authStore.isAdmin && !authStore.isProfessor) return; 
-
     selectedCurso.value = curso;
     alumnosInscritos.value = [];
     isModalOpen.value = true;
     isFetchingAlumnos.value = true;
 
     try {
-        // Llama a la nueva función del store
         const alumnos = await cursosStore.fetchAlumnosInscritos(curso.id);
         alumnosInscritos.value = alumnos;
     } catch (error) {
@@ -251,25 +229,20 @@ const handleVerAlumnos = async (curso) => {
     }
 };
 
-// 2. Cierra el modal y limpia los estados
 const closeModal = () => {
     isModalOpen.value = false;
     selectedCurso.value = null;
     alumnosInscritos.value = [];
 };
 
-// --- LÓGICA DE ESTADO ---
-
 const handleInscription = async (cursoId, cursoNombre) => {
-// Ajuste la variable 'tipo' para que use 'asignacion_profesor' si es un profesor.
   const tipo = authStore.isStudent 
       ? 'inscripcion_alumno' 
-      : 'asignacion_profesor' // <-- CAMBIO AQUÍ
+      : 'asignacion_profesor'
   
   try {
       if (userId.value) {
         await cursosStore.sendSolicitud(userId.value, cursoId, tipo)
-        // También ajusto el mensaje para que sea más claro
         const tipo_display = authStore.isStudent ? 'Inscripción' : 'Asignación Docente'
         alert(`¡Solicitud de ${tipo_display} enviada para el curso "${cursoNombre}"! El administrador debe aprobarla.`)
       } else {
@@ -298,8 +271,7 @@ const handleBaja = async (cursoId, cursoNombre) => {
 const getStatusText = (curso) => {
   const userIdVal = userId.value;
   if (!userIdVal) return 'Disponible';
-
-  // Usa las funciones del store
+  
   if (cursosStore.isUserAssignedOrInscribed(userIdVal, curso.id)) {
     return 'Inscrito / Asignado'
   }

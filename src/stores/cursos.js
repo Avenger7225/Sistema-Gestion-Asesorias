@@ -14,11 +14,9 @@ export const useCursosStore = defineStore('cursos', () => {
     const inscripciones = ref({}) 
 
     const isUserAssignedOrInscribed = (userid, cursoid) => {
-        // Verificar si esta inscrito como ALUMNO
         const inscrito = (inscripciones.value[userid] || []).includes(cursoid);
         if (inscrito) return true;
 
-        // Verificar si esta ASIGNADO como PROFESOR
         const asignadoComoProfesor = cursos.value.some(curso => 
             curso.id === cursoid && 
             curso.id_profesor === userid
@@ -28,7 +26,6 @@ export const useCursosStore = defineStore('cursos', () => {
         return false;
     }
 
-    // Funcion para verificar el estado pendiente
     const isSolicitudPending = (userid, cursoid) => {
         return solicitudes.value.some(solicitud =>
             solicitud.user_id === userid &&
@@ -38,11 +35,9 @@ export const useCursosStore = defineStore('cursos', () => {
     }
 
     const isUserInvolved = (userid, cursoid) => {
-        // Verificar si está inscrito como ALUMNO
         const inscrito = (inscripciones.value[userid] || []).includes(cursoid);
         if (inscrito) return true;
 
-        // Verificar si tiene solicitud PENDIENTE
         const pendiente = solicitudes.value.some(solicitud =>
             solicitud.user_id === userid &&
             solicitud.curso_id === cursoid &&
@@ -215,7 +210,7 @@ export const useCursosStore = defineStore('cursos', () => {
                 .select(`
                     *,
                     curso:curso_id(nombre),
-                    usuario:user_id(nombre) // <-- Mantenemos este join para el nombre del Admin
+                    usuario:user_id(nombre)
                 `)
 
             if (fetchError) throw fetchError
@@ -319,30 +314,48 @@ export const useCursosStore = defineStore('cursos', () => {
         const authStore = useAuthStore()
         if (!authStore.isAdmin) throw new Error("No tienes permisos.")
 
+        // Crear el payload con los campos que realmente pueden ser editados
+        const updatePayload = {
+            horario: curso.horario,
+            // Usar el valor que llega, asegurando que sea al menos 1
+            cupo_maximo: Math.max(1, curso.cupo_maximo || 1), 
+            // CORRECCIÓN: Usar 'profesorId' que es el nombre que viene del componente
+            id_profesor: curso.profesorId || null, 
+        };
+
         const { data, error } = await supabase
             .from("asesorias")
-            .update({
-                nombre: curso.nombre,
-                descripcion: curso.descripcion,
-                horario: curso.horario,
-                cupo_maximo: curso.cupo_maximo > 0 ? curso.cupo_maximo : 1,
-                id_profesor: curso.profesorId || null,
-            })
+            .update(updatePayload) // Usamos el payload limpio
             .eq("id", cursoid)
             .select()
 
-        if (error) throw error
-
-        const index = cursos.value.findIndex(c => c.id === cursoid)
-        if (index !== -1) {
-            cursos.value[index] = {
-                ...data[0],
-                profesorNombre: curso.profesorNombre || "Sin asignar"
-            }
+        if (error) {
+            console.error('❌ Error Supabase UPDATE:', error); 
+            // Si el error es una violación de RLS, la consola lo mostrará.
+            throw error; 
         }
 
-        return data[0]
+        // AQUI CORREGIMOS: Solo si la base de datos devuelve datos actualizados (data[0] existe)
+        if (data && data.length > 0) {
+            const updatedData = {
+                ...data[0],
+                // Sincronizar el nombre del profesor para la UI
+                profesorNombre: curso.profesorNombre || "Sin asignar" 
+            };
+            
+            // Lógica de sincronización Pinia
+            const index = cursos.value.findIndex(c => c.id === cursoid)
+            if (index !== -1) {
+                cursos.value[index] = updatedData
+            }
+            
+            return updatedData
+        } 
+        
+        // Si no hubo error, pero tampoco hubo datos (lo cual es raro), lanzamos un error genérico
+        throw new Error("La actualización no devolvió el curso modificado.");
     }
+
 
     const deleteCurso = async (cursoId) => {
         const authStore = useAuthStore()
