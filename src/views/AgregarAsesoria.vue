@@ -28,7 +28,7 @@
       </div>
 
       <div>
-        <label for="horario" class="block text-sm font-medium text-gray-700">Horario (Ej: Lun/Mié 10:00 - 12:00)</label>
+        <label for="horario" class="block text-sm font-medium text-gray-700">Horario y Aula (Ej: Lunes a Miercoles 10:00 - 12:00 Aula 10)</label>
         <input
           type="text"
           id="horario"
@@ -60,7 +60,6 @@
           >
             <option :value="null">-- Sin asignar --</option>
             
-            <!-- NOTA: Aquí debes listar los profesores reales obtenidos del store -->
             <option value="9f61b4aa-2a85-451e-bdbf-ea848f760d15">Profesor Prueba 1</option>
             <option value="1f23c4d5-56e7-890a-b12c-d34e56f7890a">Profesor Prueba 2</option>
             
@@ -97,39 +96,31 @@ import { useRouter } from 'vue-router';
 const cursosStore = useCursosStore();
 const router = useRouter();
 
-// Inicialización del nuevo curso con valores por defecto
 const newCurso = ref({
   nombre: '',
   descripcion: '',
   horario: '',
   cupo: 1,
-  profesorId: null, // ID del profesor (UUID)
+  profesorId: null,
 });
 
 const message = ref(null);
 const messageClass = ref('');
 
-// 🏆 FUNCIÓN PRINCIPAL ASÍNCRONA PARA GUARDAR EN SUPABASE
 const submitForm = async () => { 
-  // Limpiamos mensajes
   message.value = null;
   messageClass.value = '';
   
   try {
-    // La acción addCurso en el Store espera el objeto newCurso.value
     await cursosStore.addCurso(newCurso.value); 
-
-    // 4. Mostrar mensaje de éxito
     message.value = `¡Curso "${newCurso.value.nombre}" agregado con éxito!`;
     messageClass.value = 'bg-green-100 text-green-800';
 
-    // 5. Redirigir
     setTimeout(() => {
-        router.push({ name: 'cursos' }); // Volver a la lista de cursos
+        router.push({ name: 'cursos' });
     }, 1500);
 
   } catch (error) {
-    // El error.message viene del error que lanzamos en el Store
     message.value = `Error al guardar el curso: ${error.message}`;
     messageClass.value = 'bg-red-100 text-red-800';
     console.error("Error al guardar:", error);

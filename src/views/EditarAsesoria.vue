@@ -28,7 +28,7 @@
         <h2 class="text-xl font-semibold text-gray-700">Opciones Editables</h2>
 
         <div>
-          <label for="horario" class="block text-sm font-medium text-gray-700">Horario (Ej: Lun/Mié 10:00 - 12:00)</label>
+          <label for="horario" class="block text-sm font-medium text-gray-700">Horario y Aula (Ej: Lunes a Miercoles 10:00 - 12:00 Aula 10)</label>
           <input
             type="text"
             id="horario"

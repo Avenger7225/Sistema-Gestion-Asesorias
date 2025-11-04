@@ -66,7 +66,7 @@ const routes = [
           name: 'admin-register',
           component: AdminRegister, 
           meta: { requiresAuth: true, requiresAdmin: true } 
-      },
+      }
     ]
   },
 

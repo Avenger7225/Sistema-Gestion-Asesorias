@@ -38,7 +38,7 @@
         
         <div class="mt-4 border-t border-gray-100 pt-4 grid grid-cols-2 gap-4 text-sm">
           <div>
-            <p class="font-medium text-gray-700">Horario:</p>
+            <p class="font-medium text-gray-700">Horario y Aula:</p>
             <p class="text-gray-500">{{ curso.horario }}</p>
           </div>
           <div>
@@ -53,34 +53,38 @@
 
         <div class="mt-6 flex justify-end space-x-3">       
           <!-- Botones de inscripcion y baja (Solo para Alumno/Profesor) -->
-        <template v-if="!authStore.isAdmin">
-            <div class="col-span-1 flex justify-end items-center">
-                <template v-if="cursosStore.isUserAssignedOrInscribed(authStore.user?.id, curso.id)">
-                    <button 
-                        @click="handleBaja(curso.id, curso.nombre)"
-                        class="px-5 py-2 bg-red-600 text-white font-medium rounded-lg shadow-md hover:bg-red-700 transition duration-150"
-                    >
-                        Solicitar Baja
-                    </button>
-                </template>
-                
-                <span 
-                    v-else-if="cursosStore.isSolicitudPending(authStore.user?.id, curso.id)"
-                    class="inline-block px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800"
-                >
-                    SOLICITUD PENDIENTE
-                </span>
-                
-                <button 
-                    v-else
-                    @click="handleInscription(curso.id, curso.nombre)"
-                    class="px-5 py-2 bg-green-600 text-white font-medium rounded-lg shadow-md hover:bg-green-700 transition duration-150 disabled:opacity-50"
-                    :disabled="!authStore.isStudent && !authStore.isProfessor || (authStore.isProfessor && curso.profesorNombre && curso.profesorNombre !== 'Sin asignar')"
-                    >
-                    Solicitar {{ authStore.isStudent ? 'Inscripción' : 'Ser Docente' }}
-                </button>
-            </div>
-        </template>
+          <template v-if="!authStore.isAdmin">
+              <div class="col-span-1 flex justify-end items-center">
+                  
+                  <!-- 1. PENDIENTE (PRIORIDAD AL ESTADO DE SOLICITUD) -->
+                  <span 
+                      v-if="cursosStore.isSolicitudPending(authStore.user?.id, curso.id)"
+                      class="inline-block px-3 py-1 text-sm font-semibold rounded-full bg-yellow-100 text-yellow-800 animate-pulse"
+                  >
+                      SOLICITUD PENDIENTE
+                  </span>
+
+                  <!-- 2. INSCRITO / ASIGNADO (Permite solicitar Baja) -->
+                  <template v-else-if="cursosStore.isUserAssignedOrInscribed(authStore.user?.id, curso.id)">
+                      <button 
+                          @click="showBajaConfirmation(curso.id, curso.nombre)"
+                          class="px-5 py-2 bg-red-600 text-white font-medium rounded-lg shadow-md hover:bg-red-700 transition duration-150"
+                      >
+                          Solicitar Baja
+                      </button>
+                  </template>
+                  
+                  <!-- 3. DISPONIBLE (Permite solicitar Inscripción/Docente) -->
+                  <button 
+                      v-else
+                      @click="showInscriptionConfirmation(curso.id, curso.nombre)"
+                      class="px-5 py-2 bg-green-600 text-white font-medium rounded-lg shadow-md hover:bg-green-700 transition duration-150 disabled:opacity-50"
+                      :disabled="!authStore.isStudent && !authStore.isProfessor || (authStore.isProfessor && curso.profesorNombre && curso.profesorNombre !== 'Sin asignar')"
+                      >
+                      Solicitar {{ authStore.isStudent ? 'Inscripción' : 'Ser Docente' }}
+                  </button>
+              </div>
+          </template>
 
           <!-- Botones de Administrador (Editar y Eliminar) -->
           <template v-if="authStore.isAdmin || authStore.isProfessor"> 
@@ -111,9 +115,11 @@
         </div>
       </div>
     </div>
+
+    <!-- MODAL 1: Lista de Alumnos (Sin cambios, solo añadido bg-opacity) -->
       <div 
         v-if="isModalOpen" 
-        class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center"
+        class="fixed inset-0 z-40 overflow-y-auto flex items-center justify-center bg-gray-900 bg-opacity-50"
       >
           <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg mx-4 transform transition-all">
           
@@ -150,11 +156,45 @@
           </div>
         </div>
       </div>
+
+      <!-- MODAL 2: Confirmación de Solicitud (Nuevo) -->
+      <div 
+        v-if="confirmationDetails.show" 
+        class="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center bg-opacity-70"
+      >
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4 transform transition-all">
+          
+          <h3 class="text-xl font-bold text-gray-800 mb-3 border-b pb-2 flex items-center">
+            <svg v-if="confirmationDetails.type === 'baja'" class="w-6 h-6 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            <svg v-else class="w-6 h-6 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+            {{ confirmationDetails.title }}
+          </h3>
+
+          <p class="text-gray-700 mb-4">{{ confirmationDetails.message }}</p>
+          <p class="text-xs text-red-500 mt-2">El administrador debe aprobar esta solicitud.</p>
+
+          <div class="mt-6 flex justify-end space-x-3">
+            <button
+              @click="cancelConfirmation"
+              class="px-4 py-2 bg-gray-200 text-gray-800 font-medium rounded-lg hover:bg-gray-300 transition duration-150"
+            >
+              Cancelar
+            </button>
+            <button
+              @click="executeConfirmation"
+              :class="['px-4 py-2 text-white font-medium rounded-lg shadow-md transition duration-150', confirmationDetails.type === 'baja' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700']"
+            >
+              Confirmar
+            </button>
+          </div>
+        </div>
+      </div>
+
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, reactive } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useCursosStore } from '@/stores/cursos'
 import { useRouter } from 'vue-router'
@@ -166,48 +206,54 @@ const cursosStore = useCursosStore()
 const router = useRouter()
 const userId = computed(() => authStore.user?.id)
 
-// ESTADOS DEL MODAL
+// ESTADOS DEL MODAL DE ALUMNOS
 const isModalOpen = ref(false);
 const selectedCurso = ref(null);
 const alumnosInscritos = ref([]);
 const isFetchingAlumnos = ref(false);
-const { cursos: cursosDelStore, isLoading, inscripciones } = storeToRefs(cursosStore) 
+
+// ESTADO DEL MODAL DE CONFIRMACIÓN (Nuevo)
+const confirmationDetails = reactive({
+    show: false,
+    title: '',
+    message: '',
+    cursoId: null,
+    cursoNombre: '',
+    type: null, // 'inscripcion' o 'baja'
+});
+
+const { cursos: cursosDelStore, isLoading, solicitudes, inscripciones } = storeToRefs(cursosStore) 
 const cursosDisponibles = cursosDelStore
 
 onMounted(() => {
     if (cursosDelStore.value.length === 0) {
         cursosStore.fetchCursos();
-        cursosStore.fetchSolicitudes(); 
     }
 });
 
+// --- FUNCIONES DE ADMINISTRACIÓN ---
 const handleCreate = () => {
   router.push({ name: 'crear-asesoria' })
 }
 
 const handleEdit = (cursoId) => {
-    console.log(`Intentando editar el Curso ID: ${cursoId}`);
     router.push({ name: 'editar-asesoria', params: { cursoId: cursoId } });
 };
 
 const handleDelete = async (cursoId, cursoNombre) => {
     if (!authStore.isAdmin) {
-        alert("Error de Seguridad: No tienes permisos de administrador para eliminar.");
         return;
     }
     
-    const confirmMessage = `¿Estás ABSOLUTAMENTE SEGURO de eliminar el curso "${cursoNombre}"? Esta acción es irreversible.`;
-    const isConfirmed = window.prompt(confirmMessage);
-    if (!isConfirmed || isConfirmed.toLowerCase() !== cursoNombre.toLowerCase()) {
-        alert("Eliminación cancelada o confirmación incorrecta.");
+    const confirmation = window.prompt(`Para confirmar la eliminación del curso "${cursoNombre}", escribe EXACTAMENTE el nombre del curso.`);
+    
+    if (confirmation !== cursoNombre) {
         return;
     }
 
     try {
         await cursosStore.deleteCurso(cursoId);
-        alert(`¡Curso "${cursoNombre}" eliminado correctamente!`);
     } catch (error) {
-        alert(`Error al eliminar el curso: ${error.message}`);
     }
 }
 
@@ -223,7 +269,6 @@ const handleVerAlumnos = async (curso) => {
         alumnosInscritos.value = alumnos;
     } catch (error) {
         console.error("Error al cargar alumnos:", error);
-        alert("Hubo un error al cargar la lista de alumnos.");
     } finally {
         isFetchingAlumnos.value = false;
     }
@@ -235,7 +280,58 @@ const closeModal = () => {
     alumnosInscritos.value = [];
 };
 
-const handleInscription = async (cursoId, cursoNombre) => {
+// --- LÓGICA DE CONFIRMACIÓN DE SOLICITUDES (NUEVO) ---
+const showInscriptionConfirmation = (cursoId, cursoNombre) => {
+    const isStudent = authStore.isStudent;
+    const action = isStudent ? 'Inscripción' : 'como Docente';
+    
+    Object.assign(confirmationDetails, {
+        show: true,
+        title: `Solicitud de ${action}`,
+        message: `¿Estás seguro de enviar tu solicitud de ${action.toLowerCase()} para el curso "${cursoNombre}"?`,
+        cursoId,
+        //cursoNombre,
+        type: 'inscripcion',
+    });
+};
+
+// Muestra el modal de confirmación para Baja
+const showBajaConfirmation = (cursoId, cursoNombre) => {
+    const action = authStore.isStudent ? 'Baja como Alumno' : 'Baja como Docente';
+
+    Object.assign(confirmationDetails, {
+        show: true,
+        title: `Confirmar Solicitud de Baja`,
+        message: `¿Estás seguro de enviar la solicitud de ${action.toLowerCase()} para el curso "${cursoNombre}"?`,
+        cursoId,
+        //cursoNombre,
+        type: 'baja',
+    });
+};
+
+// Cancela y oculta el modal
+const cancelConfirmation = () => {
+    confirmationDetails.show = false;
+    confirmationDetails.cursoId = null;
+    confirmationDetails.type = null;
+};
+
+// Ejecuta la acción después de la confirmación
+const executeConfirmation = async () => {
+    const { cursoId, cursoNombre, type } = confirmationDetails;
+    
+    if (type === 'inscripcion') {
+        await submitInscription(cursoId, cursoNombre);
+    } else if (type === 'baja') {
+        await submitBaja(cursoId, cursoNombre);
+    }
+    
+    cancelConfirmation(); // Oculta el modal después de la ejecución
+};
+
+// --- FUNCIONES DE SOLICITUD (Modificadas para ser privadas) ---
+
+const submitInscription = async (cursoId, cursoNombre) => {
   const tipo = authStore.isStudent 
       ? 'inscripcion_alumno' 
       : 'asignacion_profesor'
@@ -244,40 +340,42 @@ const handleInscription = async (cursoId, cursoNombre) => {
       if (userId.value) {
         await cursosStore.sendSolicitud(userId.value, cursoId, tipo)
         const tipo_display = authStore.isStudent ? 'Inscripción' : 'Asignación Docente'
-        alert(`¡Solicitud de ${tipo_display} enviada para el curso "${cursoNombre}"! El administrador debe aprobarla.`)
+        // Se podría añadir un pequeño mensaje de éxito aquí si se usara un sistema de notificación
       } else {
         console.error("No se pudo enviar la solicitud: ID de usuario no disponible.")
       }
   } catch (error) {
-      alert(`Error: ${error.message}`)
+    // Se podría añadir un pequeño mensaje de error aquí
+    console.error(`Error al enviar solicitud: ${error.message}`)
   }
 }
 
-const handleBaja = async (cursoId, cursoNombre) => {
+const submitBaja = async (cursoId, cursoNombre) => {
   const tipo = authStore.isStudent ? 'baja_alumno' : 'baja_profesor'
 
   try {
       if (userId.value) {
         await cursosStore.sendSolicitud(userId.value, cursoId, tipo)
-        alert(`¡Solicitud de BAJA enviada para el curso "${cursoNombre}"! El administrador debe aprobarla.`)
+        // Se podría añadir un pequeño mensaje de éxito aquí
       } else {
         console.error("No se pudo enviar la solicitud: ID de usuario no disponible.")
       }
   } catch (error) {
-      alert(`Error: ${error.message}`)
+    console.error(`Error al enviar solicitud: ${error.message}`)
   }
 }
 
+// --- LÓGICA DE ESTADO ---
 const getStatusText = (curso) => {
   const userIdVal = userId.value;
   if (!userIdVal) return 'Disponible';
+
+  if (cursosStore.isSolicitudPending(userIdVal, curso.id)) {
+    return 'Solicitud Pendiente'
+  }
   
   if (cursosStore.isUserAssignedOrInscribed(userIdVal, curso.id)) {
     return 'Inscrito / Asignado'
-  }
-  
-  if (cursosStore.isSolicitudPending(userIdVal, curso.id)) {
-    return 'Solicitud Pendiente'
   }
   
   return 'Disponible'

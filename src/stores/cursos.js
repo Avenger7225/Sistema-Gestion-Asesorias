@@ -314,36 +314,29 @@ export const useCursosStore = defineStore('cursos', () => {
         const authStore = useAuthStore()
         if (!authStore.isAdmin) throw new Error("No tienes permisos.")
 
-        // Crear el payload con los campos que realmente pueden ser editados
-        const updatePayload = {
+            const updatePayload = {
             horario: curso.horario,
-            // Usar el valor que llega, asegurando que sea al menos 1
             cupo_maximo: Math.max(1, curso.cupo_maximo || 1), 
-            // CORRECCIÓN: Usar 'profesorId' que es el nombre que viene del componente
             id_profesor: curso.profesorId || null, 
         };
 
         const { data, error } = await supabase
             .from("asesorias")
-            .update(updatePayload) // Usamos el payload limpio
+            .update(updatePayload)
             .eq("id", cursoid)
             .select()
 
         if (error) {
             console.error('❌ Error Supabase UPDATE:', error); 
-            // Si el error es una violación de RLS, la consola lo mostrará.
             throw error; 
         }
 
-        // AQUI CORREGIMOS: Solo si la base de datos devuelve datos actualizados (data[0] existe)
         if (data && data.length > 0) {
             const updatedData = {
                 ...data[0],
-                // Sincronizar el nombre del profesor para la UI
                 profesorNombre: curso.profesorNombre || "Sin asignar" 
             };
             
-            // Lógica de sincronización Pinia
             const index = cursos.value.findIndex(c => c.id === cursoid)
             if (index !== -1) {
                 cursos.value[index] = updatedData
@@ -352,7 +345,6 @@ export const useCursosStore = defineStore('cursos', () => {
             return updatedData
         } 
         
-        // Si no hubo error, pero tampoco hubo datos (lo cual es raro), lanzamos un error genérico
         throw new Error("La actualización no devolvió el curso modificado.");
     }
 
