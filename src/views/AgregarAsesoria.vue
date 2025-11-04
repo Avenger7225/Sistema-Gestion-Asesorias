@@ -38,13 +38,37 @@
         />
       </div>
       
+      <!-- INICIO: Nuevos Campos de Classroom -->
+      <div>
+        <label for="enlace" class="block text-sm font-medium text-gray-700">Enlace a Google Classroom (Opcional)</label>
+        <input
+          type="url"
+          id="enlace"
+          v-model="newCurso.classroom"
+          placeholder="https://classroom.google.com/c/..."
+          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+        />
+      </div>
+
+      <div>
+        <label for="clave" class="block text-sm font-medium text-gray-700">Clave de Acceso a Classroom (Opcional)</label>
+        <input
+          type="text"
+          id="clave"
+          v-model="newCurso.clave_classroom"
+          placeholder="Ej: abc123def"
+          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+        />
+      </div>
+      <!-- FIN: Nuevos Campos de Classroom -->
+
       <div class="grid grid-cols-2 gap-6">
         <div>
-          <label for="cupo" class="block text-sm font-medium text-gray-700">Cupo Máximo</label>
+          <label for="cupo_maximo" class="block text-sm font-medium text-gray-700">Cupo Máximo</label>
           <input
             type="number"
-            id="cupo"
-            v-model.number="newCurso.cupo"
+            id="cupo_maximo"
+            v-model.number="newCurso.cupo_maximo"
             required
             min="1"
             class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
@@ -58,11 +82,15 @@
             v-model="newCurso.profesorId"
             class="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
           >
-            <option :value="null">-- Sin asignar --</option>
-            
-            <option value="9f61b4aa-2a85-451e-bdbf-ea848f760d15">Profesor Prueba 1</option>
-            <option value="1f23c4d5-56e7-890a-b12c-d34e56f7890a">Profesor Prueba 2</option>
-            
+            <option :value="null">-- Sin asignar --</option>       
+            <option 
+              v-for="profesor in profesoresDisponibles" 
+              :key="profesor.id"
+              :value="profesor.id"
+            >
+              Prof. ({{ profesor.nombre }})
+            </option>
+           
           </select>
         </div>
       </div>
@@ -89,7 +117,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useCursosStore } from '@/stores/cursos';
 import { useRouter } from 'vue-router';
 
@@ -100,18 +128,37 @@ const newCurso = ref({
   nombre: '',
   descripcion: '',
   horario: '',
-  cupo: 1,
+  cupo_maximo: 1,
   profesorId: null,
+  classroom: '',
+  clave_classroom: '',
 });
 
+const profesoresDisponibles = ref([]);
 const message = ref(null);
 const messageClass = ref('');
+
+const loadData = async () => {
+  profesoresDisponibles.value = await cursosStore.fetchProfesores();
+  await cursosStore.fetchCursos();
+};
+
+onMounted(() => {
+    loadData();
+});
+
+const getProfesorById = (id) => {
+    if (!id) return { nombre: 'Sin asignar' };
+    const profesor = profesoresDisponibles.value.find(p => p.id === id);
+    return { nombre: profesor ? `Prof. ${profesor.nombre}` : 'Sin asignar' }; 
+};
 
 const submitForm = async () => { 
   message.value = null;
   messageClass.value = '';
   
   try {
+    // La store debe ser modificada para aceptar estos nuevos campos
     await cursosStore.addCurso(newCurso.value); 
     message.value = `¡Curso "${newCurso.value.nombre}" agregado con éxito!`;
     messageClass.value = 'bg-green-100 text-green-800';

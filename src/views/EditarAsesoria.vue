@@ -38,6 +38,30 @@
           />
         </div>
         
+        <!-- INICIO: Nuevos Campos de Classroom -->
+        <div>
+          <label for="enlace" class="block text-sm font-medium text-gray-700">Enlace a Google Classroom (Opcional)</label>
+          <input
+            type="url"
+            id="enlace"
+            v-model="curso.classroom"
+            placeholder="https://classroom.google.com/c/..."
+            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+          />
+        </div>
+
+        <div>
+          <label for="clave" class="block text-sm font-medium text-gray-700">Clave de Acceso a Classroom (Opcional)</label>
+          <input
+            type="text"
+            id="clave"
+            v-model="curso.clave_classroom"
+            placeholder="Ej: abc123def"
+            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+          />
+        </div>
+        <!-- FIN: Nuevos Campos de Classroom -->
+
         <div class="grid grid-cols-2 gap-6">
           
           <div>
@@ -115,17 +139,17 @@ const { cursos } = storeToRefs(cursosStore);
 const curso = ref({
   horario: '',
   cupo_maximo: 1,
-  profesorId: null, // Debe ser null para manejar "Sin asignar"
-  nombre: 'Cargando...'
+  profesorId: null,
+  nombre: 'Cargando...',
+  classroom: '',
+  clave_classroom: '',
 }); 
 const profesoresDisponibles = ref([]);
 const message = ref(null);
 const messageClass = ref('');
 
 const loadData = async () => {
-  // Aseguramos que los profesores se carguen primero
   profesoresDisponibles.value = await cursosStore.fetchProfesores();
-  // Luego cargamos los cursos (para tener el curso actual)
   await cursosStore.fetchCursos();
 };
 
@@ -136,17 +160,14 @@ onMounted(() => {
 const getProfesorById = (id) => {
     if (!id) return { nombre: 'Sin asignar' };
     const profesor = profesoresDisponibles.value.find(p => p.id === id);
-    // Retornamos un objeto para evitar errores si no se encuentra
     return { nombre: profesor ? `Prof. ${profesor.nombre}` : 'Sin asignar' }; 
 };
 
-// Sincroniza el curso del store con el formulario local
 watchEffect(() => {
   const cursoIdStr = route.params.cursoId;
   const currentCursos = cursos.value; 
 
   if (!currentCursos || currentCursos.length === 0) {
-      // Estado de carga inicial
       curso.value.id = null;
       curso.value.nombre = 'Cargando...';
       return; 
@@ -154,11 +175,11 @@ watchEffect(() => {
   const foundCurso = currentCursos.find(c => c.id === cursoIdStr); 
 
   if (foundCurso) {
-    // 🔑 CORRECCIÓN IMPORTANTE: Mapear id_profesor a profesorId para el v-model
     curso.value = { 
         ...foundCurso,
-        // Usar null si id_profesor es undefined o '' o 0 para que el select funcione
         profesorId: foundCurso.id_profesor || null, 
+        classroom: foundCurso.classroom || '',
+        clave_classroom: foundCurso.clave_classroom || '',
     }; 
   } else {
     curso.value.id = null;
@@ -167,18 +188,17 @@ watchEffect(() => {
 });
 
 const submitForm = async () => {
-  // Aseguramos que sea null si está vacío (problema común de formularios)
   const idProfesorLimpio = curso.value.profesorId === '' ? null : curso.value.profesorId;
   const profesorData = getProfesorById(idProfesorLimpio);
   
   try {
-    // Se construye el payload que la función `updateCurso` espera:
     const payload = {
         horario: curso.value.horario,
         cupo_maximo: curso.value.cupo_maximo,
-        // Usamos el ID limpio
         profesorId: idProfesorLimpio, 
-        profesorNombre: profesorData.nombre 
+        profesorNombre: profesorData.nombre,
+        classroom: curso.value.classroom,
+        clave_classroom: curso.value.clave_classroom,
     };
 
     const updatedCurso = await cursosStore.updateCurso(curso.value.id, payload);
@@ -187,12 +207,9 @@ const submitForm = async () => {
     messageClass.value = 'bg-green-100 text-green-800';
 
     setTimeout(() => {
-        // Redireccionar o limpiar mensaje
-        // router.push({ name: 'cursos' }); 
     }, 1500);
 
   } catch (error) {
-    // Si hay un error de Supabase, se mostrará aquí
     message.value = `Error al actualizar el curso: ${error.message || error.toString()}`;
     messageClass.value = 'bg-red-100 text-red-800';
     console.error("Error al actualizar:", error);

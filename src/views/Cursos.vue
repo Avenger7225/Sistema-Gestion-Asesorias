@@ -49,6 +49,15 @@
             <p class="font-medium text-gray-700">Cupo:</p>
             <p class="text-gray-500">{{ curso.cupo_maximo }} estudiantes</p>
           </div>
+          <!-- ✅ SOLO PARA ADMINISTRADOR: mostrar clave o enlaces -->
+          <div v-if="authStore.isAdmin" class="mt-4 border-t border-gray-200 pt-4 text-sm">
+            <p class="font-medium text-gray-700">Datos de la clase:</p>
+
+            <div class="text-gray-600 mt-1">
+              <p v-if="curso.classroom"><strong>Enlace:</strong> {{ curso.classroom }}</p>
+              <p v-if="curso.clave_classroom"><strong>Clave:</strong> {{ curso.clave_classroom }}</p>
+            </div>
+          </div>
         </div>
 
         <div class="mt-6 flex justify-end space-x-3">       

@@ -34,15 +34,37 @@
             <div 
                 v-for="curso in misCursos" 
                 :key="curso.id"
-                class="bg-white border border-gray-200 rounded-lg p-4 shadow-md"
+                class="bg-white border border-gray-200 rounded-xl p-5 shadow-lg"
             >
                 <h3 class="text-xl font-bold text-gray-800">{{ curso.nombre }}</h3>
                 <p class="text-sm text-gray-500 mt-1">{{ curso.descripcion }}</p>
                 
-                <div class="mt-3 text-sm grid grid-cols-2 gap-2">
+                <div class="mt-3 text-sm grid grid-cols-1 md:grid-cols-2 gap-2">
                     <p><strong>Horario:</strong> {{ curso.horario }}</p>
                     <p><strong>Profesor:</strong> {{ curso.profesorNombre }}</p> 
                 </div>
+
+                <!-- INICIO: Información de Google Classroom -->
+                <div v-if="curso.classroom || curso.clave_classroom" class="mt-4 pt-3 border-t border-dashed border-gray-200">
+                    <h4 class="text-base font-semibold text-indigo-700 mb-2">Acceso a Google Classroom</h4>
+                    
+                    <div class="space-y-2 text-sm">
+                        <!-- Enlace -->
+                        <div v-if="curso.classroom" class="flex items-center">
+                            <svg class="w-4 h-4 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path d="M11 3a1 1 0 100 2h3.586l-2.793 2.793a1 1 0 101.414 1.414L16 6.414V10a1 1 0 102 0V3a1 1 0 00-1-1h-7zM7 11a1 1 0 100 2h2a1 1 0 100-2H7zM3 15a1 1 0 100 2h2a1 1 0 100-2H3zM13 15a1 1 0 100 2h2a1 1 0 100-2h-2zM7 7a1 1 0 100 2h2a1 1 0 100-2H7zM3 7a1 1 0 100 2h2a1 1 0 100-2H3zM17 17H3v-4H1v6a1 1 0 001 1h16a1 1 0 001-1v-6h-2v4z"/></svg>
+                            <a :href="curso.classroom" target="_blank" class="text-indigo-600 hover:text-indigo-800 hover:underline font-medium break-all">
+                                Ir a la Clase
+                            </a>
+                        </div>
+                        
+                        <!-- Clave -->
+                        <div v-if="curso.clave_classroom" class="flex items-center">
+                            <svg class="w-4 h-4 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 8h-2.5V6.5a4.5 4.5 0 00-9 0V8H4a2 2 0 00-2 2v7a2 2 0 002 2h12a2 2 0 002-2v-7a2 2 0 00-2-2zm-9-1.5a2.5 2.5 0 015 0V8H9V6.5zM4 10h12v7H4v-7z" clip-rule="evenodd"/></svg>
+                            <p class="text-gray-700">Clave: <span class="font-bold tracking-widest">{{ curso.clave_classroom }}</span></p>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>

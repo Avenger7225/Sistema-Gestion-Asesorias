@@ -284,70 +284,79 @@ export const useCursosStore = defineStore('cursos', () => {
     }
 
     const addCurso = async (curso) => {
-        const authStore = useAuthStore()
-        if (!authStore.isAdmin) throw new Error("No tienes permisos.")
+    const authStore = useAuthStore()
+    if (!authStore.isAdmin) throw new Error("No tienes permisos.")
 
-        const { data, error } = await supabase
-            .from("asesorias")
-            .insert([
-                {
-                    nombre: curso.nombre,
-                    descripcion: curso.descripcion,
-                    horario: curso.horario,
-                    cupo_maximo: curso.cupo_maximo > 0 ? curso.cupo_maximo : 1,
-                    id_profesor: curso.profesorId || null
-                }
-            ])
-            .select()
+    const { data, error } = await supabase
+        .from("asesorias")
+        .insert([{
+            nombre: curso.nombre,
+            descripcion: curso.descripcion,
+            horario: curso.horario,
+            cupo_maximo: curso.cupo_maximo > 0 ? curso.cupo_maximo : 1,
+            id_profesor: curso.profesorId || null,
+            classroom: curso.classroom || null,           // <-- nuevo
+            clave_classroom: curso.clave_classroom || null // <-- nuevo
+        }])
+        .select();
 
-        if (error) throw error
+    if (error) throw error;
 
-        cursos.value.push({
-            ...data[0],
-            profesorNombre: curso.profesorNombre || "Sin asignar"
-        })
+    // Asegurarse de que data[0] contiene los campos nuevos (si la BD los devuelve)
+    cursos.value.push({
+        ...data[0],
+        profesorNombre: curso.profesorNombre || "Sin asignar"
+    });
 
-        return data[0]
-    }
+    return data[0];
+    };
 
     const updateCurso = async (cursoid, curso) => {
         const authStore = useAuthStore()
         if (!authStore.isAdmin) throw new Error("No tienes permisos.")
 
-            const updatePayload = {
+        // Crear el payload con los campos que realmente pueden ser editados
+        const updatePayload = {
             horario: curso.horario,
-            cupo_maximo: Math.max(1, curso.cupo_maximo || 1), 
-            id_profesor: curso.profesorId || null, 
+            cupo_maximo: Math.max(1, curso.cupo_maximo || 1),
+            id_profesor: curso.profesorId || null,
+            // Agregamos los campos de Classroom para que se guarden
+            classroom: curso.classroom ?? null,
+            clave_classroom: curso.clave_classroom ?? null,
         };
 
         const { data, error } = await supabase
             .from("asesorias")
             .update(updatePayload)
             .eq("id", cursoid)
-            .select()
+            .select();
 
         if (error) {
-            console.error('❌ Error Supabase UPDATE:', error); 
-            throw error; 
+            console.error('❌ Error Supabase UPDATE:', error);
+            throw error;
         }
 
         if (data && data.length > 0) {
             const updatedData = {
                 ...data[0],
-                profesorNombre: curso.profesorNombre || "Sin asignar" 
+                profesorNombre: curso.profesorNombre || "Sin asignar"
             };
-            
+
             const index = cursos.value.findIndex(c => c.id === cursoid)
             if (index !== -1) {
                 cursos.value[index] = updatedData
             }
-            
-            return updatedData
-        } 
-        
-        throw new Error("La actualización no devolvió el curso modificado.");
-    }
 
+            const idx2 = misCursos.value.findIndex(c => c.id === cursoid);
+            if (idx2 !== -1) {
+            misCursos.value[idx2] = updatedData;
+            }
+
+            return updatedData
+        }
+
+        throw new Error("La actualización no devolvió el curso modificado.");
+    };
 
     const deleteCurso = async (cursoId) => {
         const authStore = useAuthStore()
